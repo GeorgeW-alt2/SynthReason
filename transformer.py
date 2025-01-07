@@ -10,7 +10,7 @@ model_name = "text_generator_v3"
     
 filename = 'test.txt'
 # Constants
-KB_MEMORY_UNCOMPRESSED = 1000
+KB_MEMORY_UNCOMPRESSED = 10000
 SEQUENCE_LENGTH = 3
 NUM_EPOCHS = 10
 GENERATE_LENGTH = 1000
@@ -179,6 +179,10 @@ def train_model(model, data_loader, num_epochs, learning_rate=0.001, device='cud
         avg_loss = total_loss / num_batches
         print(f"Epoch {epoch + 1}/{num_epochs}, Average Loss: {avg_loss:.4f}")
 
+import torch
+import torch.nn.functional as F
+import numpy as np
+
 def generate_text(model, seed_text, word_to_index, index_to_word, vocab_size, sequence_length, 
                  num_words, temperature, device='cuda' if torch.cuda.is_available() else 'cpu'):
     model.eval()
@@ -190,37 +194,47 @@ def generate_text(model, seed_text, word_to_index, index_to_word, vocab_size, se
         raise ValueError(f"Seed text must contain at least {sequence_length} words")
 
     current_sequence = words[-sequence_length:]
+
+    # Convert current sequence to tensor
+    try:
+        sequence_indices = [word_to_index[word] for word in current_sequence]
+    except KeyError:
+        print("Warning: Unknown word in seed text. Using random word from vocabulary.")
+        sequence_indices = np.random.choice(list(index_to_word.keys()), sequence_length).tolist()
+    x = torch.tensor([sequence_indices], dtype=torch.long)
+
     generated_words = []
     full_stop_count = 0  # To count full stops (periods)
     word_correlation = {}  # Dictionary to keep track of recent correlations
+    
     with torch.no_grad():
         for _ in range(num_words):
-            # Convert current sequence to tensor
-            try:
-                sequence_indices = [word_to_index[word] for word in current_sequence]
-            except KeyError:
-                print("Warning: Unknown word in seed text. Using random word from vocabulary.")
-                sequence_indices = np.random.choice(list(index_to_word.keys()), sequence_length).tolist()
+            # One-hot encode the sequence
+            x_one_hot = F.one_hot(x, num_classes=vocab_size).float()  # One-hot encoding of the input tensor
+            x_one_hot = x_one_hot.reshape(1, -1).to(device)  # Flatten and move to the device
+            
+            # Get predictions from the model (forward pass)
+            logits = model(x_one_hot)
 
-            sequence_tensor = torch.tensor([sequence_indices], dtype=torch.long)
-            x = F.one_hot(sequence_tensor, num_classes=vocab_size).float()
-            x = x.reshape(1, -1).to(device)
-
-            # Get predictions
-            logits = model(x)
-
-            # Apply temperature
+            # Apply temperature scaling
             scaled_logits = logits / temperature
+
+            # Convert logits to probabilities using softmax
             probs = F.softmax(scaled_logits, dim=-1)
 
-            # Sample from the distribution
+            # Sample from the probability distribution
             next_word_idx = torch.multinomial(probs, 1).item()
             next_word = index_to_word[next_word_idx]
 
             generated_words.append(next_word)
 
-            # Update sequence for next iteration
+            # Update the sequence for the next iteration
+            # Keep the last 'sequence_length' words and append the generated word
             current_sequence = current_sequence[1:] + [next_word]
+            
+            # Convert the updated sequence to tensor for the next iteration
+            sequence_indices = [word_to_index[word] for word in current_sequence]
+            x = torch.tensor([sequence_indices], dtype=torch.long)  # Update tensor for next pass
 
     return ' '.join(generated_words)
 
