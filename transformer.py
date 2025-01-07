@@ -9,7 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 4000
+KB_MEMORY_UNCOMPRESSED = 8000
 SEQUENCE_LENGTH = 4
 NUM_EPOCHS = 5
 GENERATE_LENGTH = 140
@@ -116,7 +116,7 @@ class KANEmbedding(nn.Module):
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
         
         pos_enc[:, 0::2] = torch.sin(position / div_term)
-        pos_enc[:, 1::2] = torch.cos(position * div_term)
+        pos_enc[:, 1::2] = torch.cos(position / div_term)
         return nn.Parameter(pos_enc, requires_grad=False)
 
     def rotate(self, embedding):
