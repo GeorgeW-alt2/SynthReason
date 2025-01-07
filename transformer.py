@@ -115,7 +115,7 @@ class KANEmbedding(nn.Module):
         position = torch.arange(0, max_seq_len, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
         
-        pos_enc[:, 0::2] = torch.sin(position * div_term)
+        pos_enc[:, 0::2] = torch.sin(position / div_term)
         pos_enc[:, 1::2] = torch.cos(position * div_term)
         return nn.Parameter(pos_enc, requires_grad=False)
 
