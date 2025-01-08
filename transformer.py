@@ -13,7 +13,7 @@ KB_MEMORY_UNCOMPRESSED = 8000
 SEQUENCE_LENGTH = 4
 NUM_EPOCHS = 5
 GENERATE_LENGTH = 140
-TEMPERATURE = 0.7
+TEMPERATURE = 0.8
 EMBEDDING_DIM = 512
 KNOWLEDGE_DIM = 512
 HIDDEN_DIM = 512
@@ -169,38 +169,39 @@ class ModelHandler:
     def generate_text(self, input_text, max_length=GENERATE_LENGTH):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model.eval()
-        
+
         # Preprocess input text
         input_sequence = self.preprocessor.preprocess_text(input_text)
-        indices = [self.preprocessor.word_to_index.get(word, -1) for word in input_sequence 
-                  if word in self.preprocessor.word_to_index]
-        
+        indices = [self.preprocessor.word_to_index[word] for word in input_sequence if word in self.preprocessor.word_to_index]
+
         if not indices:
             return "Input text contains no recognizable words."
-        
-        # Initialize sequence
+
+        # Initialize sequence with padding if needed
         current_sequence = indices[-SEQUENCE_LENGTH:]
         if len(current_sequence) < SEQUENCE_LENGTH:
-            padding = [0] * (SEQUENCE_LENGTH - len(current_sequence))
-            current_sequence = padding + current_sequence
-            
+            current_sequence = [0] * (SEQUENCE_LENGTH - len(current_sequence)) + current_sequence
+
         generated_text = []
-        input_tensor = torch.tensor(current_sequence, dtype=torch.long).unsqueeze(0).to(device)
-        
+        input_tensor = torch.tensor([current_sequence], dtype=torch.long).to(device)
+
         # Generate text
         with torch.no_grad():
             for _ in range(max_length):
                 output = self.model(input_tensor)
                 probabilities = torch.softmax(output / TEMPERATURE, dim=-1).squeeze()
-                next_word_idx = torch.multinomial(probabilities, 1).item()
+                next_word_idx = torch.multinomial(probabilities.permute(*torch.arange(probabilities.ndim - 1, -1, -1)), 1).item()
                 generated_text.append(next_word_idx)
-                
-                input_tensor = torch.cat((input_tensor[:, 1:], 
-                                        torch.tensor([[next_word_idx]], device=device)), dim=1)
-        
+
+                # Update input sequence
+                input_tensor = torch.cat(
+                    (input_tensor[:, 1:], torch.tensor([[next_word_idx]], device=device)), dim=1
+                )
+
         # Convert indices back to words
         reverse_vocab = {i: word for word, i in self.preprocessor.word_to_index.items()}
         return ' '.join([reverse_vocab.get(idx, "<UNK>") for idx in generated_text])
+
 
     def save_model(self, model_path='transformer_model.pt', vocab_path='vocab.pkl'):
         torch.save({
