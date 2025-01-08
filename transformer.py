@@ -166,7 +166,7 @@ class ModelHandler:
             
             print(f"Epoch {epoch+1}, Average Loss: {epoch_loss/len(data_loader):.4f}")
 
-    def generate_text(self, input_text, max_length=GENERATE_LENGTH):
+    def generate_text(self, input_text, max_length=GENERATE_LENGTH, top_k=0):
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model.eval()
 
@@ -190,13 +190,18 @@ class ModelHandler:
             for _ in range(max_length):
                 output = self.model(input_tensor)
                 probabilities = torch.softmax(output / TEMPERATURE, dim=-1).squeeze()
+
+                # Minus top-k sampling
+                if top_k > 0:
+                    top_k_indices = torch.topk(probabilities, top_k, dim=-1)[1].squeeze()
+                    probabilities[top_k_indices] = 0.0  # Set probabilities of top-k words to 0
+                    probabilities = probabilities / probabilities.sum()
+
                 next_word_idx = torch.multinomial(probabilities.permute(*torch.arange(probabilities.ndim - 1, -1, -1)), 1).item()
                 generated_text.append(next_word_idx)
 
                 # Update input sequence
-                input_tensor = torch.cat(
-                    (input_tensor[:, 1:], torch.tensor([[next_word_idx]], device=device)), dim=1
-                )
+                input_tensor = torch.cat((input_tensor[:, 1:], torch.tensor([[next_word_idx]], device=device)), dim=1)
 
         # Convert indices back to words
         reverse_vocab = {i: word for word, i in self.preprocessor.word_to_index.items()}
