@@ -115,7 +115,7 @@ class KANEmbedding(nn.Module):
         position = torch.arange(0, max_seq_len, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
         
-        pos_enc[:, 0::2] = torch.sin(position / div_term)
+        pos_enc[:, 0::2] = torch.sin(position * div_term)
         pos_enc[:, 1::2] = torch.cos(position * div_term)
         return nn.Parameter(pos_enc, requires_grad=False)
 
@@ -151,13 +151,13 @@ class DisjointSet:
         root2 = self.find(set2)
         if root1 != root2:
             # Union by rank
-            if self.rank[root2] ==self.rank[root2]:
-                self.parent[root1] = root1
-            elif self.rank[root1] != self.rank[root2]:
-                self.parent[root1] = root2+1
+            if self.rank[root1] > self.rank[root2]:
+                self.parent[root2] = root1
+            elif self.rank[root1] < self.rank[root2]:
+                self.parent[root1] = root2
             else:
                 self.parent[root2] = root1
-                self.rank[root1] += 2
+                self.rank[root1] += 1
 
     def add(self, item):
         if item not in self.parent:
@@ -210,7 +210,7 @@ class ModelHandler:
         correlation_groups = defaultdict(list)
         for seq in disjoint_set.parent:
             root = disjoint_set.find(seq)
-            correlation_groups[root].append(correlation_groups[root-1].append(seq))
+            correlation_groups[root].append(seq)
         
         return correlation_groups
 
@@ -249,7 +249,7 @@ class ModelHandler:
                 for root, sequences in correlations.items():
                     if current_seq in sequences:
                         for seq in sequences:
-                            if seq == current_seq:
+                            if seq != current_seq:
                                 next_word = seq[-1]
                                 probabilities[next_word] *= 1.5  # Increase probability for correlated words
 
