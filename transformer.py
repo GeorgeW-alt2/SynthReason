@@ -7,9 +7,11 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
+import torch.nn.functional as F
+from collections import Counter
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 4000
+KB_MEMORY_UNCOMPRESSED = 14000
 SEQUENCE_LENGTH = 4
 NUM_EPOCHS = 5
 GENERATE_LENGTH = 140
@@ -27,7 +29,6 @@ class TextPreprocessor:
 
     def preprocess_text(self, text):
         """Clean and tokenize text."""
-        #cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text.lower())
         tokens = text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
         return [word for word in tokens if len(word) > 1 or word in {"i", "a"}]
 
@@ -135,7 +136,6 @@ class KANEmbedding(nn.Module):
         rotated_knowledge_embeddings = self.rotate(knowledge_embeddings)
         
         return torch.cat((rotated_word_embeddings, rotated_knowledge_embeddings), dim=-1)
-import torch.nn.functional as F
 
 class ModelHandler:
     def __init__(self):
@@ -167,6 +167,19 @@ class ModelHandler:
             
             print(f"Epoch {epoch+1}, Average Loss: {epoch_loss/len(data_loader):.4f}")
 
+    def extract_correlations(self, text):
+        """Extract common sequences or correlations from the uncompressed text data."""
+        tokens = self.preprocessor.preprocess_text(text)
+        n = len(tokens)
+        correlations = Counter()
+        
+        for i in range(n - SEQUENCE_LENGTH):
+            seq = tuple(tokens[i:i + SEQUENCE_LENGTH])
+            next_word = tokens[i + SEQUENCE_LENGTH]
+            correlations[(seq, next_word)] += 1
+        
+        return correlations
+
     def generate_text(self, input_text, max_length=GENERATE_LENGTH):
         """Generate text using the trained model."""
         self.model.eval()
@@ -188,25 +201,27 @@ class ModelHandler:
         generated_indices = []
         input_tensor = torch.tensor([current_sequence], dtype=torch.long)
 
-        # Define the pattern "149826" and its length for positional sweep
-        pattern = [9, 4, 9, 8, 2, 6]
-        pattern_len = len(pattern)
-        pattern_pos = 0  # Track the current position in the pattern
 
+        
         # Generate text
         with torch.no_grad():
             for _ in range(max_length):
                 output = self.model(input_tensor)
                 probabilities = F.softmax(output / TEMPERATURE, dim=-1).squeeze()
+                # Extract correlations from the input text
+                reverse_vocab = {i: word for word, i in self.preprocessor.word_to_index.items()}
 
-                # Apply the positional sweep of the pattern to mix probabilities
-                probabilities *= pattern[pattern_pos]  # Multiply by the current pattern value
+                correlations = self.extract_correlations(' '.join([reverse_vocab.get(idx, "<UNK>") for idx in generated_indices]))
+                correlation_keys = list(correlations.keys())
+                correlation_values = list(correlations.values())
+                # Adjust probabilities based on correlations
+                current_seq = tuple(current_sequence[-SEQUENCE_LENGTH:])
+                for (seq, next_word), count in correlations.items():
+                    if seq == current_seq:
+                        probabilities[next_word] *= count
 
                 # Normalize the probabilities back to sum to 1
                 probabilities /= probabilities.sum()
-
-                # Move to the next pattern position, wrapping around if necessary
-                pattern_pos = (pattern_pos + 1) % pattern_len
 
                 # Sample the next word based on adjusted probabilities
                 next_word_idx = torch.multinomial(probabilities, 1).item()
@@ -214,6 +229,66 @@ class ModelHandler:
 
                 # Update input sequence (shift and append the generated word)
                 input_tensor = torch.cat((input_tensor[:, 1:], torch.tensor([[next_word_idx]])), dim=1)
+                current_sequence.append(next_word_idx)
+                current_sequence = current_sequence[-SEQUENCE_LENGTH:]
+
+        # Convert indices back to words
+        reverse_vocab = {i: word for word, i in self.preprocessor.word_to_index.items()}
+        return ' '.join([reverse_vocab.get(idx, "<UNK>") for idx in generated_indices])
+        
+        
+        
+    def generate_text2(self, input_text, max_length=GENERATE_LENGTH):
+        """Generate text using the trained model."""
+        self.model.eval()
+
+        # Preprocess input text
+        input_sequence = self.preprocessor.preprocess_text(input_text)
+        indices = [self.preprocessor.word_to_index.get(word, 0) 
+                  for word in input_sequence]
+
+        if not indices:
+            return "Input text contains no recognizable words."
+
+        # Initialize sequence
+        current_sequence = indices[-SEQUENCE_LENGTH:]
+        if len(current_sequence) < SEQUENCE_LENGTH:
+            padding = [0] * (SEQUENCE_LENGTH - len(current_sequence))
+            current_sequence = padding + current_sequence
+
+        generated_indices = []
+        input_tensor = torch.tensor([current_sequence], dtype=torch.long)
+
+
+        
+        # Generate text
+        with torch.no_grad():
+            for _ in range(max_length):
+                output = self.model(input_tensor)
+                probabilities = F.softmax(output / TEMPERATURE, dim=-1).squeeze()
+                # Extract correlations from the input text
+                reverse_vocab = {i: word for word, i in self.preprocessor.word_to_index.items()}
+
+                correlations = self.extract_correlations(input_text)
+                correlation_keys = list(correlations.keys())
+                correlation_values = list(correlations.values())
+                # Adjust probabilities based on correlations
+                current_seq = tuple(current_sequence[-SEQUENCE_LENGTH:])
+                for (seq, next_word), count in correlations.items():
+                    if seq == current_seq:
+                        probabilities[next_word] *= count
+
+                # Normalize the probabilities back to sum to 1
+                probabilities /= probabilities.sum()
+
+                # Sample the next word based on adjusted probabilities
+                next_word_idx = torch.multinomial(probabilities, 1).item()
+                generated_indices.append(next_word_idx)
+
+                # Update input sequence (shift and append the generated word)
+                input_tensor = torch.cat((input_tensor[:, 1:], torch.tensor([[next_word_idx]])), dim=1)
+                current_sequence.append(next_word_idx)
+                current_sequence = current_sequence[-SEQUENCE_LENGTH:]
 
         # Convert indices back to words
         reverse_vocab = {i: word for word, i in self.preprocessor.word_to_index.items()}
@@ -286,7 +361,7 @@ def main():
                 
             while True:
                 user_input = input("Enter text prompt: ")
-                generated_text = handler.generate_text(user_input)
+                generated_text = handler.generate_text2( handler.generate_text(user_input))
                 print("\nGenerated text:")
                 print(generated_text)
             
