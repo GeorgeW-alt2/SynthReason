@@ -8,7 +8,7 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 import torch.nn.functional as F
-from collections import Counter
+from collections import defaultdict
 
 # Constants
 KB_MEMORY_UNCOMPRESSED = 4000
@@ -30,15 +30,14 @@ class TextPreprocessor:
     def preprocess_text(self, text):
         """Clean and tokenize text."""
         tokens = text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
-        return [word for word in tokens if len(word) > 1 or word in {"i", "a"}]
+        return tokens
 
     def build_vocabulary(self, text_data):
         """Build vocabulary with word frequencies."""
         tokens = self.preprocess_text(text_data)
         word_counts = {word: tokens.count(word) for word in set(tokens)}
-        vocab = sorted(word_counts, key=word_counts.get, reverse=True)
-        self.word_to_index = {word: i for i, word in enumerate(vocab)}
-        self.vocab_size = len(vocab)
+        self.word_to_index = {word: i for i, word in enumerate(word_counts)}
+        self.vocab_size = len(word_counts)
         return self.word_to_index, self.vocab_size
 
     def create_sequences(self, text):
@@ -137,6 +136,34 @@ class KANEmbedding(nn.Module):
         
         return torch.cat((rotated_word_embeddings, rotated_knowledge_embeddings), dim=-1)
 
+class DisjointSet:
+    def __init__(self):
+        self.parent = {}
+        self.rank = {}
+
+    def find(self, item):
+        if self.parent[item] != item:
+            self.parent[item] = self.find(self.parent[item])  # Path compression
+        return self.parent[item]
+
+    def union(self, set1, set2):
+        root1 = self.find(set1)
+        root2 = self.find(set2)
+        if root1 != root2:
+            # Union by rank
+            if self.rank[root1] > self.rank[root2]:
+                self.parent[root2] = root1
+            elif self.rank[root1] < self.rank[root2]:
+                self.parent[root1] = root2
+            else:
+                self.parent[root2] = root1
+                self.rank[root1] += 1
+
+    def add(self, item):
+        if item not in self.parent:
+            self.parent[item] = item
+            self.rank[item] = 0
+
 class ModelHandler:
     def __init__(self):
         self.model = None
@@ -168,17 +195,24 @@ class ModelHandler:
             print(f"Epoch {epoch+1}, Average Loss: {epoch_loss/len(data_loader):.4f}")
 
     def extract_correlations(self, text):
-        """Extract common sequences or correlations from the uncompressed text data."""
+        """Extract common sequences or correlations from the uncompressed text data using a disjoint-set."""
         tokens = self.preprocessor.preprocess_text(text)
         n = len(tokens)
-        correlations = Counter()
+        disjoint_set = DisjointSet()
         
         for i in range(n - SEQUENCE_LENGTH):
             seq = tuple(tokens[i:i + SEQUENCE_LENGTH])
             next_word = tokens[i + SEQUENCE_LENGTH]
-            correlations[(seq, next_word)] += i
+            disjoint_set.add(seq)
+            disjoint_set.add(next_word)
+            disjoint_set.difference(seq, next_word)
         
-        return correlations
+        correlation_groups = defaultdict(list)
+        for seq in disjoint_set.parent:
+            root = disjoint_set.find(seq)
+            correlation_groups[root].append(seq)
+        
+        return correlation_groups
 
     def generate_text(self, input_text, max_length=GENERATE_LENGTH):
         """Generate text using the trained model."""
@@ -201,82 +235,23 @@ class ModelHandler:
         generated_indices = []
         input_tensor = torch.tensor([current_sequence], dtype=torch.long)
 
-
+        # Extract correlations from the input text
+        correlations = self.extract_correlations(input_text)
         
         # Generate text
         with torch.no_grad():
             for _ in range(max_length):
                 output = self.model(input_tensor)
                 probabilities = F.softmax(output / TEMPERATURE, dim=-1).squeeze()
-                # Extract correlations from the input text
-                reverse_vocab = {i: word for word, i in self.preprocessor.word_to_index.items()}
 
-                correlations = self.extract_correlations(' '.join([reverse_vocab.get(idx, "<UNK>") for idx in generated_indices]))
-                correlation_keys = list(correlations.keys())
-                correlation_values = list(correlations.values())
                 # Adjust probabilities based on correlations
                 current_seq = tuple(current_sequence[-SEQUENCE_LENGTH:])
-                for (seq, next_word), count in correlations.items():
-                    if seq == current_seq:
-                        probabilities[next_word] *= count
-
-                # Normalize the probabilities back to sum to 1
-                probabilities /= probabilities.sum()
-
-                # Sample the next word based on adjusted probabilities
-                next_word_idx = torch.multinomial(probabilities, 1).item()
-                generated_indices.append(next_word_idx)
-
-                # Update input sequence (shift and append the generated word)
-                input_tensor = torch.cat((input_tensor[:, 1:], torch.tensor([[next_word_idx]])), dim=1)
-                current_sequence.append(next_word_idx)
-                current_sequence = current_sequence[-SEQUENCE_LENGTH:]
-
-        # Convert indices back to words
-        reverse_vocab = {i: word for word, i in self.preprocessor.word_to_index.items()}
-        return ' '.join([reverse_vocab.get(idx, "<UNK>") for idx in generated_indices])
-        
-        
-        
-    def generate_text2(self, input_text, max_length=GENERATE_LENGTH):
-        """Generate text using the trained model."""
-        self.model.eval()
-
-        # Preprocess input text
-        input_sequence = self.preprocessor.preprocess_text(input_text)
-        indices = [self.preprocessor.word_to_index.get(word, 0) 
-                  for word in input_sequence]
-
-        if not indices:
-            return "Input text contains no recognizable words."
-
-        # Initialize sequence
-        current_sequence = indices[-SEQUENCE_LENGTH:]
-        if len(current_sequence) < SEQUENCE_LENGTH:
-            padding = [0] * (SEQUENCE_LENGTH - len(current_sequence))
-            current_sequence = padding + current_sequence
-
-        generated_indices = []
-        input_tensor = torch.tensor([current_sequence], dtype=torch.long)
-
-
-        
-        # Generate text
-        with torch.no_grad():
-            for _ in range(max_length):
-                output = self.model(input_tensor)
-                probabilities = F.softmax(output / TEMPERATURE, dim=-1).squeeze()
-                # Extract correlations from the input text
-                reverse_vocab = {i: word for word, i in self.preprocessor.word_to_index.items()}
-
-                correlations = self.extract_correlations(input_text)
-                correlation_keys = list(correlations.keys())
-                correlation_values = list(correlations.values())
-                # Adjust probabilities based on correlations
-                current_seq = tuple(current_sequence[-SEQUENCE_LENGTH:])
-                for (seq, next_word), count in correlations.items():
-                    if seq == current_seq:
-                        probabilities[next_word] *= count
+                for root, sequences in correlations.items():
+                    if current_seq in sequences:
+                        for seq in sequences:
+                            if seq != current_seq:
+                                next_word = seq[-1]
+                                probabilities[next_word] *= 1.5  # Increase probability for correlated words
 
                 # Normalize the probabilities back to sum to 1
                 probabilities /= probabilities.sum()
@@ -361,7 +336,7 @@ def main():
                 
             while True:
                 user_input = input("Enter text prompt: ")
-                generated_text = handler.generate_text2( handler.generate_text(user_input))
+                generated_text = handler.generate_text(user_input)
                 print("\nGenerated text:")
                 print(generated_text)
             
