@@ -11,7 +11,7 @@ import torch.nn.functional as F
 from collections import defaultdict
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 10000  # Increased memory limit
+KB_MEMORY_UNCOMPRESSED = 1000  # Increased memory limit
 SEQUENCE_LENGTH = 3
 NUM_EPOCHS = 5
 GENERATE_LENGTH = 140
@@ -41,7 +41,7 @@ class TextPreprocessor:
         return self.word_to_index, self.vocab_size
 
     def create_sequences(self, text):
-        """Convert text into sequences."""
+        """Convert text into sequences and include inverse sequences."""
         tokens = self.preprocess_text(text)
         encoded = [self.word_to_index[word] for word in tokens if word in self.word_to_index]
         
@@ -50,7 +50,11 @@ class TextPreprocessor:
             seq = encoded[i-SEQUENCE_LENGTH:i]
             target = encoded[i]
             if len(seq) == SEQUENCE_LENGTH:
+                # Add original sequence
                 sequences.append((seq, target))
+                # Add inverse sequence
+                inverse_seq = seq[i::-1]
+                sequences.append((inverse_seq, target))
         return sequences
 
 class TextDataset(Dataset):
