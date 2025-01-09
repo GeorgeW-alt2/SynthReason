@@ -11,8 +11,8 @@ import torch.nn.functional as F
 from collections import Counter
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 14000
-SEQUENCE_LENGTH = 4
+KB_MEMORY_UNCOMPRESSED = 4000
+SEQUENCE_LENGTH = 3
 NUM_EPOCHS = 5
 GENERATE_LENGTH = 140
 TEMPERATURE = 0.7
@@ -176,7 +176,7 @@ class ModelHandler:
         for i in range(n - SEQUENCE_LENGTH):
             seq = tuple(tokens[i:i + SEQUENCE_LENGTH])
             next_word = tokens[i + SEQUENCE_LENGTH]
-            correlations[(seq, next_word)] += 1
+            correlations[(seq, next_word)] += i
         
         return correlations
 
