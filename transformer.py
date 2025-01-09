@@ -9,15 +9,15 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
 # Constants
-KB_MEMORY_UNCOMPRESSED = 8000
+KB_MEMORY_UNCOMPRESSED = 4000
 SEQUENCE_LENGTH = 4
 NUM_EPOCHS = 5
 GENERATE_LENGTH = 140
-TEMPERATURE = 0.8
-EMBEDDING_DIM = 512
-KNOWLEDGE_DIM = 512
+TEMPERATURE = 0.7
+EMBEDDING_DIM = 256
+KNOWLEDGE_DIM = 256
 HIDDEN_DIM = 512
-BATCH_SIZE = 512
+BATCH_SIZE = 256
 LEARNING_RATE = 0.001
 
 class TextPreprocessor:
@@ -27,8 +27,8 @@ class TextPreprocessor:
 
     def preprocess_text(self, text):
         """Clean and tokenize text."""
-        cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text.lower())
-        tokens = cleaned_text.split()[:KB_MEMORY_UNCOMPRESSED]
+        #cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text.lower())
+        tokens = text.lower().split()[:KB_MEMORY_UNCOMPRESSED]
         return [word for word in tokens if len(word) > 1 or word in {"i", "a"}]
 
     def build_vocabulary(self, text_data):
@@ -115,8 +115,8 @@ class KANEmbedding(nn.Module):
         position = torch.arange(0, max_seq_len, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
         
-        pos_enc[:, 0::2] = torch.sin(position / div_term)
-        pos_enc[:, 1::2] = torch.cos(position / div_term)
+        pos_enc[:, 0::2] = torch.sin(position * div_term)
+        pos_enc[:, 1::2] = torch.cos(position * div_term)
         return nn.Parameter(pos_enc, requires_grad=False)
 
     def rotate(self, embedding):
@@ -135,6 +135,7 @@ class KANEmbedding(nn.Module):
         rotated_knowledge_embeddings = self.rotate(knowledge_embeddings)
         
         return torch.cat((rotated_word_embeddings, rotated_knowledge_embeddings), dim=-1)
+import torch.nn.functional as F
 
 class ModelHandler:
     def __init__(self):
@@ -166,47 +167,57 @@ class ModelHandler:
             
             print(f"Epoch {epoch+1}, Average Loss: {epoch_loss/len(data_loader):.4f}")
 
-    def generate_text(self, input_text, max_length=GENERATE_LENGTH, top_k=0):
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    def generate_text(self, input_text, max_length=GENERATE_LENGTH):
+        """Generate text using the trained model."""
         self.model.eval()
 
         # Preprocess input text
         input_sequence = self.preprocessor.preprocess_text(input_text)
-        indices = [self.preprocessor.word_to_index[word] for word in input_sequence if word in self.preprocessor.word_to_index]
+        indices = [self.preprocessor.word_to_index.get(word, 0) 
+                  for word in input_sequence]
 
         if not indices:
             return "Input text contains no recognizable words."
 
-        # Initialize sequence with padding if needed
+        # Initialize sequence
         current_sequence = indices[-SEQUENCE_LENGTH:]
         if len(current_sequence) < SEQUENCE_LENGTH:
-            current_sequence = [0] * (SEQUENCE_LENGTH - len(current_sequence)) + current_sequence
+            padding = [0] * (SEQUENCE_LENGTH - len(current_sequence))
+            current_sequence = padding + current_sequence
 
-        generated_text = []
-        input_tensor = torch.tensor([current_sequence], dtype=torch.long).to(device)
+        generated_indices = []
+        input_tensor = torch.tensor([current_sequence], dtype=torch.long)
+
+        # Define the pattern "149826" and its length for positional sweep
+        pattern = [9, 4, 9, 8, 2, 6]
+        pattern_len = len(pattern)
+        pattern_pos = 0  # Track the current position in the pattern
 
         # Generate text
         with torch.no_grad():
             for _ in range(max_length):
                 output = self.model(input_tensor)
-                probabilities = torch.softmax(output / TEMPERATURE, dim=-1).squeeze()
+                probabilities = F.softmax(output / TEMPERATURE, dim=-1).squeeze()
 
-                # Minus top-k sampling
-                if top_k > 0:
-                    top_k_indices = torch.topk(probabilities, top_k, dim=-1)[1].squeeze()
-                    probabilities[top_k_indices] = 0.0  # Set probabilities of top-k words to 0
-                    probabilities = probabilities / probabilities.sum()
+                # Apply the positional sweep of the pattern to mix probabilities
+                probabilities *= pattern[pattern_pos]  # Multiply by the current pattern value
 
-                next_word_idx = torch.multinomial(probabilities.permute(*torch.arange(probabilities.ndim - 1, -1, -1)), 1).item()
-                generated_text.append(next_word_idx)
+                # Normalize the probabilities back to sum to 1
+                probabilities /= probabilities.sum()
 
-                # Update input sequence
-                input_tensor = torch.cat((input_tensor[:, 1:], torch.tensor([[next_word_idx]], device=device)), dim=1)
+                # Move to the next pattern position, wrapping around if necessary
+                pattern_pos = (pattern_pos + 1) % pattern_len
+
+                # Sample the next word based on adjusted probabilities
+                next_word_idx = torch.multinomial(probabilities, 1).item()
+                generated_indices.append(next_word_idx)
+
+                # Update input sequence (shift and append the generated word)
+                input_tensor = torch.cat((input_tensor[:, 1:], torch.tensor([[next_word_idx]])), dim=1)
 
         # Convert indices back to words
         reverse_vocab = {i: word for word, i in self.preprocessor.word_to_index.items()}
-        return ' '.join([reverse_vocab.get(idx, "<UNK>") for idx in generated_text])
-
+        return ' '.join([reverse_vocab.get(idx, "<UNK>") for idx in generated_indices])
 
     def save_model(self, model_path='transformer_model.pt', vocab_path='vocab.pkl'):
         torch.save({
@@ -222,11 +233,11 @@ class ModelHandler:
         checkpoint = torch.load(model_path)
         with open(vocab_path, 'rb') as f:
             self.preprocessor.word_to_index = pickle.load(f)
-            self.preprocessor.vocab_size = len(self.preprocessor.word_to_index)
-        
+        self.preprocessor.vocab_size = len(self.preprocessor.word_to_index)
+
+        # Initialize model and load parameters
         self.model = KnowledgeAugmentedTransformer(self.preprocessor.vocab_size)
         self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.model.eval()
         print("Model and vocabulary loaded successfully.")
 
 def main():
