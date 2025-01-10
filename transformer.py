@@ -3,9 +3,10 @@ import torch.nn as nn
 import numpy as np
 import re
 from torch.utils.data import Dataset, DataLoader
+import os
 
 KB_MEMORY_UNCOMPRESSED = 10000
-
+file_path = "model.pt"
 class TextPreprocessor:
     def __init__(self):
         self.word_to_index = None
@@ -111,18 +112,17 @@ class TextGeneratorHandler:
             
             if (epoch + 1) % 5 == 0:
                 print(f'Epoch [{epoch+1}/{epochs}], Loss: {total_loss/len(data_loader):.4f}')
-    
+                
     def generate_text(self, seed_text, num_words=50, temperature=0.7):
         self.model.eval()
         words = self.preprocessor.preprocess_text(seed_text)
-
         
         generated_words = words  # Use last 3 words as context
         
         with torch.no_grad():
             for _ in range(num_words):
                 # Convert context to tensor, handling unknown words
-                sequence = [self.preprocessor.get_word_index(w) for w in generated_words[-3:]]
+                sequence = [self.preprocessor.get_word_index(w) for w in generated_words]
                 sequence = torch.LongTensor([sequence]).to(self.device)
                 
                 # Get predictions
@@ -139,20 +139,56 @@ class TextGeneratorHandler:
                     generated_words.append(next_word)
         
         return ' '.join(generated_words)
+    
+    def save_model(self, file_path):
+        """Save the model to a file."""
+        torch.save(self.model.state_dict(), file_path)
+        print(f'Model saved to {file_path}')
+    
+    def load_model(self, file_path):
+        """Load the model from a file."""
+        self.model = TextGenerator(self.preprocessor.vocab_size).to(self.device)
+        self.model.load_state_dict(torch.load(file_path))
+        self.model.eval()
+        print(f'Model loaded from {file_path}')
 
-# Example usage
-if __name__ == "__main__":
-    # Sample text for demonstration
-    with open("test.txt", "r", encoding="utf-8") as f:
-        text = ' '.join(f.read().split())[:KB_MEMORY_UNCOMPRESSED]
-    
-    # Initialize and train the model
+def main():
     handler = TextGeneratorHandler()
-    handler.train(text, epochs=50)
-    
-    # Generate new text
     while True:
-        seed_text = input("User: ")
-        generated_text = handler.generate_text(seed_text, num_words=120)
-        print(f"\nSeed text: {seed_text}")
-        print(f"Generated text: {generated_text}")
+        print("\n1. Train Model")
+        print("2. Generate Text")
+        print("3. Save Model")
+        print("4. Load Model")
+        print("5. Exit")
+        choice = input("Enter choice: ")
+        
+        if choice == '1':
+            text_file = input("Enter KB filename for training: ")
+            with open(text_file, "r", encoding="utf-8") as f:
+                text = ' '.join(f.read().split())[:KB_MEMORY_UNCOMPRESSED]
+            epochs = 50
+            handler.train(text, epochs=epochs)
+        
+        elif choice == '2':
+            num_words = 120
+            while True:
+                seed_text = input("Enter seed text for generating text: ")
+                generated_text = handler.generate_text(seed_text, num_words=num_words)
+                print(f"\nSeed text: {seed_text}")
+                print(f"Generated text: {generated_text}")
+        
+        elif choice == '3':
+            handler.save_model(file_path)
+        
+        elif choice == '4':
+            handler.load_model(file_path)
+        
+        elif choice == '5':
+            print("Exiting...")
+            break
+        
+        else:
+            print("Invalid choice. Please try again.")
+
+if __name__ == "__main__":
+    main()
