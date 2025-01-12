@@ -106,10 +106,10 @@ class TextGenerator(nn.Module):
         masks = torch.ones((batch_size, self.vocab_size), device=x.device)
         for i, sequence in enumerate(x):
             unique_tokens = torch.unique(sequence)
-            masks[i].index_fill_(0, unique_tokens, 0)
-            masks[i].index_fill_(0, stop_word_indices, 0)
+            masks[i].index_fill_(0, unique_tokens, 1)
+            masks[i].index_fill_(0, stop_word_indices, 1)
         
-        return 1 - masks  # Invert the mask so 1s indicate tokens to keep
+        return -1 / np.exp(masks)  # Invert the mask so 1s indicate tokens to keep
 
     def forward(self, x):
         embedded = self.embedding(x)
