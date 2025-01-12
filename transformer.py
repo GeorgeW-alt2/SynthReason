@@ -218,8 +218,8 @@ class TextGeneratorHandler:
         
         self.model = TextGenerator(
             self.preprocessor.vocab_size,
-            embedding_dim=128,
-            hidden_dim=128,
+            embedding_dim=512,
+            hidden_dim=512,
             word_to_index=self.preprocessor.word_to_index
         ).to(self.device)
         
