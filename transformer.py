@@ -6,10 +6,8 @@ from torch.utils.data import Dataset, DataLoader
 import os
 import torch.nn.functional as F
 EPOCHS = 50
-KB_MEMORY_UNCOMPRESSED = 3000
+KB_MEMORY_UNCOMPRESSED = 30000
 file_path = "model.pt"
-embedding_dim=128
-hidden_dim=128
 
 class TextPreprocessor:
     def __init__(self):
@@ -66,7 +64,7 @@ class TextPreprocessor:
         return torch.LongTensor(X), torch.LongTensor(y)
 
 class TextGenerator(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, word_to_index, num_layers=1):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, word_to_index, num_layers=4):
         super(TextGenerator, self).__init__()
         self.word_to_index = word_to_index
         self.vocab_size = vocab_size
@@ -149,8 +147,8 @@ class TextGeneratorHandler:
         # Initialize model
         self.model = TextGenerator(
             self.preprocessor.vocab_size,
-            embedding_dim=128,
-            hidden_dim=128,
+            embedding_dim=512,
+            hidden_dim=512,
             word_to_index=self.preprocessor.word_to_index
         ).to(self.device)
         
@@ -215,13 +213,13 @@ class TextGeneratorHandler:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"No model file found at {file_path}")
         
-        state = torch.load(file_path)
+        state = torch.load(file_path,weights_only=True)
         self.preprocessor = state['preprocessor']
         
         self.model = TextGenerator(
             self.preprocessor.vocab_size,
-            embedding_dim=embedding_dim,
-            hidden_dim=hidden_dim,
+            embedding_dim=128,
+            hidden_dim=128,
             word_to_index=self.preprocessor.word_to_index
         ).to(self.device)
         
@@ -231,6 +229,7 @@ class TextGeneratorHandler:
 
 def main():
     handler = TextGeneratorHandler()
+    torch.serialization.add_safe_globals([TextPreprocessor])
     while True:
         print("\n1. Train Model")
         print("2. Generate Text")
