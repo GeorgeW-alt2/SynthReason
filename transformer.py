@@ -133,7 +133,7 @@ class TextGeneratorHandler:
         self.preprocessor = TextPreprocessor()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    def train(self, text, sequence_length=3, batch_size=32, epochs=EPOCHS, learning_rate=0.001):
+    def train(self, text, sequence_length=3, batch_size=512, epochs=EPOCHS, learning_rate=0.001):
         # Build vocabulary
         self.preprocessor.build_vocabulary(text)
         
