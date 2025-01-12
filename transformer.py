@@ -6,7 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 import os
 import torch.nn.functional as F
 EPOCHS = 50
-KB_MEMORY_UNCOMPRESSED = 30000
+KB_MEMORY_UNCOMPRESSED = 3000
 file_path = "model.pt"
 
 class TextPreprocessor:
@@ -64,7 +64,7 @@ class TextPreprocessor:
         return torch.LongTensor(X), torch.LongTensor(y)
 
 class TextGenerator(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, word_to_index, num_layers=4):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, word_to_index, num_layers=1):
         super(TextGenerator, self).__init__()
         self.word_to_index = word_to_index
         self.vocab_size = vocab_size
@@ -106,8 +106,8 @@ class TextGenerator(nn.Module):
         masks = torch.ones((batch_size, self.vocab_size), device=x.device)
         for i, sequence in enumerate(x):
             unique_tokens = torch.unique(sequence)
-            masks[i].index_fill_(0, unique_tokens, 10)
-            masks[i].index_fill_(0, stop_word_indices, 4)
+            masks[i].index_fill_(0, unique_tokens, 0)
+            masks[i].index_fill_(0, stop_word_indices, 0)
         
         return 1 - masks  # Invert the mask so 1s indicate tokens to keep
 
@@ -133,7 +133,7 @@ class TextGeneratorHandler:
         self.preprocessor = TextPreprocessor()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    def train(self, text, sequence_length=3, batch_size=512, epochs=EPOCHS, learning_rate=0.001):
+    def train(self, text, sequence_length=3, batch_size=32, epochs=EPOCHS, learning_rate=0.001):
         # Build vocabulary
         self.preprocessor.build_vocabulary(text)
         
@@ -147,8 +147,8 @@ class TextGeneratorHandler:
         # Initialize model
         self.model = TextGenerator(
             self.preprocessor.vocab_size,
-            embedding_dim=512,
-            hidden_dim=512,
+            embedding_dim=128,
+            hidden_dim=128,
             word_to_index=self.preprocessor.word_to_index
         ).to(self.device)
         
@@ -177,13 +177,13 @@ class TextGeneratorHandler:
     
     def generate_text(self, seed_text, num_words=50, temperature=0.7):
         self.model.eval()
-        words = self.preprocessor.preprocess_text(seed_text)  # Keep last 3 words as context
-        sequence = [self.preprocessor.get_word_index(w) for w in words]
-        sequence = torch.LongTensor([sequence]).to(self.device)
-
+        words = self.preprocessor.preprocess_text(seed_text)[-3:]  # Keep last 3 words as context
+        
         with torch.no_grad():
             for _ in range(num_words):
-
+                sequence = [self.preprocessor.get_word_index(w) for w in words[-3:]]
+                sequence = torch.LongTensor([sequence]).to(self.device)
+                
                 output = self.model(sequence)
                 output = output.div(temperature)
                 probabilities = torch.exp(output)  # Convert log probabilities back to probabilities
@@ -192,8 +192,7 @@ class TextGeneratorHandler:
                 next_word = self.preprocessor.index_to_word[next_word_idx]
                 if next_word not in {self.preprocessor.unknown_token, self.preprocessor.pad_token}:
                     words.append(next_word)
-                sequence = [self.preprocessor.get_word_index(w) for w in words[-3:]]
-                sequence = torch.LongTensor([sequence]).to(self.device)
+        
         return ' '.join(words)
     
     def save_model(self, file_path):
@@ -213,13 +212,13 @@ class TextGeneratorHandler:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"No model file found at {file_path}")
         
-        state = torch.load(file_path,weights_only=True)
+        state = torch.load(file_path)
         self.preprocessor = state['preprocessor']
         
         self.model = TextGenerator(
             self.preprocessor.vocab_size,
-            embedding_dim=512,
-            hidden_dim=512,
+            embedding_dim=128,
+            hidden_dim=128,
             word_to_index=self.preprocessor.word_to_index
         ).to(self.device)
         
@@ -229,7 +228,6 @@ class TextGeneratorHandler:
 
 def main():
     handler = TextGeneratorHandler()
-    torch.serialization.add_safe_globals([TextPreprocessor])
     while True:
         print("\n1. Train Model")
         print("2. Generate Text")
