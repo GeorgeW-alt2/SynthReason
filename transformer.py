@@ -8,6 +8,8 @@ import torch.nn.functional as F
 EPOCHS = 50
 KB_MEMORY_UNCOMPRESSED = 3000
 file_path = "model.pt"
+embedding_dim=128
+hidden_dim=128
 
 class TextPreprocessor:
     def __init__(self):
@@ -106,8 +108,8 @@ class TextGenerator(nn.Module):
         masks = torch.ones((batch_size, self.vocab_size), device=x.device)
         for i, sequence in enumerate(x):
             unique_tokens = torch.unique(sequence)
-            masks[i].index_fill_(0, unique_tokens, 0)
-            masks[i].index_fill_(0, stop_word_indices, 0)
+            masks[i].index_fill_(0, unique_tokens, 10)
+            masks[i].index_fill_(0, stop_word_indices, 4)
         
         return 1 - masks  # Invert the mask so 1s indicate tokens to keep
 
@@ -177,13 +179,13 @@ class TextGeneratorHandler:
     
     def generate_text(self, seed_text, num_words=50, temperature=0.7):
         self.model.eval()
-        words = self.preprocessor.preprocess_text(seed_text)[-3:]  # Keep last 3 words as context
-        
+        words = self.preprocessor.preprocess_text(seed_text)  # Keep last 3 words as context
+        sequence = [self.preprocessor.get_word_index(w) for w in words]
+        sequence = torch.LongTensor([sequence]).to(self.device)
+
         with torch.no_grad():
             for _ in range(num_words):
-                sequence = [self.preprocessor.get_word_index(w) for w in words[-3:]]
-                sequence = torch.LongTensor([sequence]).to(self.device)
-                
+
                 output = self.model(sequence)
                 output = output.div(temperature)
                 probabilities = torch.exp(output)  # Convert log probabilities back to probabilities
@@ -192,7 +194,8 @@ class TextGeneratorHandler:
                 next_word = self.preprocessor.index_to_word[next_word_idx]
                 if next_word not in {self.preprocessor.unknown_token, self.preprocessor.pad_token}:
                     words.append(next_word)
-        
+                sequence = [self.preprocessor.get_word_index(w) for w in words[-3:]]
+                sequence = torch.LongTensor([sequence]).to(self.device)
         return ' '.join(words)
     
     def save_model(self, file_path):
@@ -217,8 +220,8 @@ class TextGeneratorHandler:
         
         self.model = TextGenerator(
             self.preprocessor.vocab_size,
-            embedding_dim=128,
-            hidden_dim=128,
+            embedding_dim=embedding_dim,
+            hidden_dim=hidden_dim,
             word_to_index=self.preprocessor.word_to_index
         ).to(self.device)
         
