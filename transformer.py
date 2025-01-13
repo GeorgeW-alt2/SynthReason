@@ -19,8 +19,8 @@ class TextPreprocessor:
 
     def preprocess_text(self, text):
         """Clean and tokenize text."""
-        cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text.lower())
-        tokens = cleaned_text.split()[:KB_MEMORY_UNCOMPRESSED]
+        #cleaned_text = re.sub(r'[^a-zA-Z\s]', '', text.lower())
+        tokens = text.split()[:KB_MEMORY_UNCOMPRESSED]
         return [word for word in tokens if len(word) > 1 or word in {"i", "a"}]
 
     def build_vocabulary(self, text_data):
@@ -133,7 +133,7 @@ class TextGeneratorHandler:
         self.preprocessor = TextPreprocessor()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    def train(self, text, sequence_length=3, batch_size=32, epochs=EPOCHS, learning_rate=20):
+    def train(self, text, sequence_length=3, batch_size=32, epochs=EPOCHS, learning_rate=120):
         # Build vocabulary
         self.preprocessor.build_vocabulary(text)
         
