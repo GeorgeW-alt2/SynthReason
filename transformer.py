@@ -133,7 +133,7 @@ class TextGeneratorHandler:
         self.preprocessor = TextPreprocessor()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    def train(self, text, sequence_length=3, batch_size=32, epochs=EPOCHS, learning_rate=0.001):
+    def train(self, text, sequence_length=3, batch_size=32, epochs=EPOCHS, learning_rate=20):
         # Build vocabulary
         self.preprocessor.build_vocabulary(text)
         
@@ -177,12 +177,12 @@ class TextGeneratorHandler:
     
     def generate_text(self, seed_text, num_words=50, temperature=0.7):
         self.model.eval()
-        words = self.preprocessor.preprocess_text(seed_text)[-3:]  # Keep last 3 words as context
-        
+        words = self.preprocessor.preprocess_text(seed_text)  # Keep last 3 words as context
+        sequence = [self.preprocessor.get_word_index(w) for w in words]
+        sequence = torch.LongTensor([sequence]).to(self.device)
         with torch.no_grad():
             for _ in range(num_words):
-                sequence = [self.preprocessor.get_word_index(w) for w in words[-3:]]
-                sequence = torch.LongTensor([sequence]).to(self.device)
+
                 
                 output = self.model(sequence)
                 output = output.div(temperature)
@@ -192,7 +192,8 @@ class TextGeneratorHandler:
                 next_word = self.preprocessor.index_to_word[next_word_idx]
                 if next_word not in {self.preprocessor.unknown_token, self.preprocessor.pad_token}:
                     words.append(next_word)
-        
+                sequence = [self.preprocessor.get_word_index(w) for w in words[-3:]]
+                sequence = torch.LongTensor([sequence]).to(self.device)
         return ' '.join(words)
     
     def save_model(self, file_path):
