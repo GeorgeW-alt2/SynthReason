@@ -7,8 +7,8 @@ import os
 import torch.nn.functional as F
 
 EPOCHS = 50
-KB_MEMORY_UNCOMPRESSED = 3000
-setting = 128
+KB_MEMORY_UNCOMPRESSED = 30000
+setting = 1280
 file_path = "model.pt"
 
 # Concept Locator Class
@@ -184,24 +184,51 @@ class TextGeneratorHandler:
             if (epoch + 1) % 5 == 0:
                 print(f'Epoch [{epoch+1}/{epochs}], Loss: {total_loss/len(data_loader):.4f}')
     
+
     def generate_text(self, seed_text, num_words=50, temperature=0.7):
         self.model.eval()
         words = self.preprocessor.preprocess_text(seed_text)  # Keep last 3 words as context
         sequence = [self.preprocessor.get_word_index(w) for w in words]
         sequence = torch.LongTensor([sequence]).to(self.device)
+        
         with torch.no_grad():
             for _ in range(num_words):
                 output = self.model(sequence)
-                output = output.div(temperature)
+                output = output.div(temperature)  # Apply temperature for randomness
                 probabilities = torch.exp(output)  # Convert log probabilities back to probabilities
-                next_word_idx = torch.multinomial(probabilities[0], 1).item()
                 
+                # Sample two words and choose one from them
+                next_word_idx = torch.multinomial(probabilities[0], 2)  # Sample 2 words
+                
+                # Extract the indices of the two sampled words
+                idx_1 = next_word_idx[0].item()
+                idx_2 = next_word_idx[1].item()
+                
+                # Get the probabilities for these two words
+                prob_word_1 = probabilities[0, idx_1].item()
+                prob_word_2 = probabilities[0, idx_2].item()
+                
+                # Use np.max to get the index of the word with the highest probability
+                max_prob_idx = np.argmax([prob_word_1, prob_word_2])
+                
+                # Choose the index of the word with the highest probability
+                next_word_idx = next_word_idx[max_prob_idx].item()
+
+                # Convert index to word using the preprocessor
                 next_word = self.preprocessor.index_to_word[next_word_idx]
+                
+                # Avoid adding unknown or padding tokens
                 if next_word not in {self.preprocessor.unknown_token, self.preprocessor.pad_token}:
                     words.append(next_word)
+                
+                # Update the sequence with the latest word
                 sequence = [self.preprocessor.get_word_index(w) for w in words[-3:]]
                 sequence = torch.LongTensor([sequence]).to(self.device)
+        
         return ' '.join(words)
+
+
+
     
     def save_model(self, file_path):
         """Save the model and preprocessor to a file."""
