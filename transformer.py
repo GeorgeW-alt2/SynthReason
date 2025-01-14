@@ -7,7 +7,7 @@ import os
 import torch.nn.functional as F
 
 EPOCHS = 50
-KB_MEMORY_UNCOMPRESSED = 30000
+KB_MEMORY_UNCOMPRESSED = 3000
 setting = 128
 file_path = "model.pt"
 
