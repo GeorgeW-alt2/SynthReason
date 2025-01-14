@@ -1,0 +1,403 @@
+//Copyright. George Frederick Wagenknecht - 2016
+int speedprocessing = 0;		// if speed prosessing is enabled responses
+string retain;					// are affected
+int searchset = 1;				// what to search for(view code for details)
+int a = 0;						// swerg
+// Scan mode 0 = intelligent. 1 = skim mode
+//string C = sha512(setup);
+//find = A.find(C);
+//cout << "Please enter your serial code:";
+//getline(cin,B);
+//string C = sha512(B);
+//find = A.find(C);
+//Sout.erase();
+//    break;
+    if (linefull.find(segment) != -1)//speedhack
+        //if (line == segment)
+        //   cout << " conceptual scan:" << segment << endl;
+//cout << " "<< file[zero] << "=" << segment; // last bug
+//Sout += file + "=" + segment;
+//k++;
+//NCount++;
+//cout << " ";
+//Sout += " ";
+//cout << endl;
+//Sout += ";";
+//Sout += " <-PatternSpace: " + spacestr + " <-Bytes: " + NCountstr;
+//cout << " <-PatternSpace: " << space << " <-Bytes: " << NCount << endl;
+    // linear progression
+    // 0 = null
+    // 1 = right
+    // 2 = left
+    // 3 = cross transition
+    // 3D progression.
+    // 4 = null
+    // 5 = x+
+    // 6 = x-
+    // 8= y+
+    // 9 = y-
+    // 10 = z+
+    // 11 = z-
+    // 4D progression
+    // 12 = null
+    // 13 = time +
+    // 14 = time -
+    // testcode
+        // progression indicator keyword DB or inet lookup
+    // testcode
+        // progression indicator keyword DB or inet lookup
+    // cross domain transfer
+// MCM (deep learning component) needs processlogic to work!
+// algebraic logical processesing buffer
+    // count words from userinput.
+    // cout << userinputcmod;
+    // cout << ucount;
+    // posend = userinputstack.find(" ", pos);
+    // cout << answerstring;
+        // g cout << answerstringsegment;
+        // cout << segmentstart << " " << segmentend;
+            // cout << "+";
+            // cout << endl << userinput << endl;
+            // cout << userinputstack;
+            // pos = posend;
+            // cout << word;
+            // cout << word;
+                // cout << deviseanswerpos << " " << deviseanswerlimit;
+                            // cout << answerstringsegment;
+                // wordcheck += filesearch(word, "self.txt");
+                // get time .
+                // get reverse descriptors
+                // cout << userinput;
+                // get word des match
+                    // cout << synthword;
+        // cout << theanswerready;
+                // cout << "test";
+                //  cout << theanswerready;
+              // cout << "->" << theanswerready;
+            //    ofstream outputfile;
+            //    outputfile.open(filename.c_str(),ios::app);
+            //    outputfile << Sout << endl;
+             //   outputfile.close();
+              //  Sout.erase();
+                //break;
+                // logic (todo)
+                // string foo = processlogic(answerstringsegment);
+        // posend = userinputstack.find(" ", pos);
+            // cout << endl << userinput << endl;
+            // cout << userinputstack;
+            // pos = posend;
+            // cout << word;
+            // hardcode md5
+            // md5check filter.txt
+            // int status = filesearch(word, "filter.txt");
+            //  if (status == 1)
+            //  {
+            //      points--;
+            //       answerstring.erase();
+            //       userinput.erase();
+            //    warning2(points);
+            //    }
+                        // cout << line;
+                        // geetwordcount
+                            // wordc++;
+                        // wordc++;
+                        // endwordcount
+                            // cout << word;
+                            // cout << wordc << " " << markerc1;
+                                // cout << "lol";
+                        // wordc++;
+                        // endwordcount
+                            // cout << word;
+                            // cout << wordc << " " << markerc2;
+                                // cout << "lol";
+                        // wordc++;
+                        // endwordcount
+                            // cout << word;
+                            // cout << wordc << " " << markerc2;
+                                // cout << "lol";
+                                // notes, get sentence
+               { // cout << "name"; string requestdescriptors = "your"; string
+               requestdescriptors + ">" + word + ":"; anscount++; // cout <<
+                   { // cout << "name"; string requestdescriptors = "concept";
+                   anscount++; // cout << requestconversion[0][0]; } */
+                   { // cout << "name"; string requestdescriptors = "reply";
+                   anscount++; // cout << requestconversion[0][0]; } */
+                    // cout << "name";
+                    // cout << requestconversion[0][0];
+                    // cout << "name";
+                    // cout << requestconversion[0][0];
+                    // cout << "name";
+                    // cout << requestconversion[0][0];
+                    // cout << "name";
+                    // cout << requestconversion[0][0];
+                    // cout << "name";
+                    // cout << requestconversion[0][0];
+                    // cout << "name";
+                    // cout << requestconversion[0][0];
+                    // cout << "name";
+                    // cout << requestconversion[0][0];
+                    // cout << "name";
+                    // cout << requestconversion[0][0];
+                    // cout << "name";
+                    // cout << requestconversion[0][0];
+                    // cout << "name";
+                    // cout << requestconversion[0][0];
+                    // cout << "name";
+                    // cout << requestconversion[0][0];
+                    // cout << "name";
+                    // cout << requestconversion[0][0];
+                    // cout << "name";
+                    // cout << requestconversion[0][0];
+                    // cout << "name";
+                    // cout << requestconversion[0][0];
+        // userinput.erase();
+//processsentence
+//	cout << BRANCH;
+        //  cout << posinit << "$ " << posinitend << endl;
+        // cout <<twig <<endl;
+            //  cout << posinit << " " << posinitend << endl;
+            //           if (userinput.find("?") == -1){
+            //@system(twig.c_str());
+                //       synthlogic += " " + synthreasonword;
+            // structure[structcount] = synthlogic;
+            //           system("sleep 0.3");
+            //       system("clear");
+        // synthlogic += twig.substr(1, twig.find(" ") -1);
+    //	while (posinititerend < posinitend)
+    //	{
+    //			posinititer = BRANCH.find(",", posinit + 1);
+//	 posinititerend = BRANCH.find(",", posinititer);
+    //	}
+    //get logic template match template
+//cout << AI_RESPONSE;
+//    string whyvar2 = magic4 +" are " + magic6 + " ";
+//    string whyvar3 =  magic4 + " " + preposition + " have " + magic5 + " " + magic6 + " " ;;
+//    string whyvar5 =  " ";
+    //return request descrip[tor construct
+//    return CONSTRUCT1 + CONSTRUCT2 + CONSTRUCT3 + CONSTRUCT4;;
+string processKnowledge(string userinput,string knowledgebase) //add select knowledgebase
+    //system("color 79");
+    //  cout << "the developer is not responsible for the user's intent using this program." << endl;
+    //  cout << "SynthReason.  v0.8a" << endl;
+    //  cout << "structure sentences speed hack? (1 or 0):";
+    // cin >> sentstruc;
+    // cout << endl;
+           cout << "#9:(how)"; getline(cin, desaction); // makegame
+        // cout << "(trade edition)" << endl;
+        //    cout << endl;
+        //  cout << n << ":";
+            // if (autothink == 0){
+            //cout << ".";
+            //    getline(cin, userinput);
+            // autothink = 1;
+            // }
+            //  system("start main.exe");
+        // if (userinput == "save answerstring")
+        // {
+        // if (userinput == "save answerstring")
+        // {
+            //system("start main \"web.txt\"");
+                //  string structureword = structurestr.substr(structposA,structposB-structposA);
+//userinput = "describe thought?";
+                // string thoughtword = thoughtstr.substr(thoughtposA,thoughtposB-thoughtposA);
+                //  cout << thoughtword;
+            //system("main \"auto.txt\"");
+        //    cout << userinput << endl;
+//      system("sleep 0.3");
+        //  system("clear");
+        // cout << remdot << " ";
+        // cout << answerstring;
+                // cout << "[" << anscount << " out of " << ucount << "
+                // words
+                // in sentence recognised" << "]" << endl;
+            // theanswerready = processresponselogic();
+        // cout << endl << answerstring << endl;
+           (0, ios::beg); //memblock1 = answerstring;
+            //	warning2(points);
+            //     break;
+        // cout << userinput;
+        //  string curl = "curl.exe www.bing.com?q=" + synthanswer + ">> web.txt";
+//        cout << curl << endl;
+            //   system(curl.c_str());
+            // cout << curl;
+        // cout << "AI THOUGHTS: " << " " << theanswerready << " ?" <<          " paragon:" << points << endl;
+        // self question descriptor algo or programable inference
+        // who is in the x? describe the x? what drinks are in the
+        // x? command
+        // object to self
+        // self to object
+        // self to idea
+        // idea to self
+        // des to self
+        // self to des
+            //	synthreasonword = word;
+//            cout << "$" << synthcom << "$";
+            //system(synthcom.c_str());
+        //  string preposition = GETPREPOSITION(userinput);
+        // string BRANCH = SYNTAXBRANCHER(theanswerready2 + theanswerready, preposition,userinput);
+        //   string SYNTAX = SYNTAXEXTRACTOR(BRANCH, preposition, userinput);
+        // string AI_RESPONSE = BRANCH + SYNTAX;
+        // RESPONSEINITPROCESSOR(AI_RESPONSE);
+//thought[thoughtcount] = theanswerready;
+        //strcpy(thought[thoughtcount],theanswerready.c_str());
+        //cout << endl << endl;
+        //thoughtcount++;
+    std::string input,presentthought,MODS,MODL,mods,concepts,modifier,ConceptLocator,LocatedConcept,WordHandle,sub,word,concept,conceptfromsub,level,AIControlLogic = "I II III O",AIControlLogicDefinitions = ":First Person:Second Person:world:cycle repeat:",AIEthics = "DHH DHM",AIEthicsDefinitions = ":Do not harm any human:Do not harm myself:do not make weapons:",AIMandates = "EP CD ISL",AIMandatesDefinitions = "{End poverty}{Cure disease}{Improve standard of living}{learn}";//($universe/system)Control logic(causality,space,time,protocol etc..)//one(self) person sim,Two(self included) person sim, world sim, cycle.(DANGER! THIS AI CONTROL LOGIC IS STRICTLY NON COMPATIBLE WITH THE RELIGION OF CHRISTIANITY! OR ANY OTHER NON-LOGICAL THEOLOGY,IDEA OR CONCEPT INVOLVING NON EXISTENT ENTITIES(correlation can become destructive)//AI ethics incorperates decision retardents when any set ethic is violated.AI ethics description ensure the artificial intelligence can comprehend the code of conduct without imaginative or postulative interpretations. if a description is set, the imaginative or postulative feature of this component is disabled//AI mandates ensure the Artificial intelligence has atleast one purpose.AI mandates descriptions ensure the artificial intelligence can comprehend the code of conduct without imaginative or postulative interpretations. if a description is set, the imaginative or postulative feature of this component is disabled.
+    //add "(no major) expression mechanism for this program"//regulate impact
+    	Begin:// 'O', Natural cycle// cycle is placed before the 'input' code segment therefore feedback, simmilar to the artificial mind being alive and processing stimuli from an environment outside the mind's existential barriers
+    	std::cout << "Initate consciousness: ";	getline (std::cin,input);std::cout << std::endl;level = input;//recieve input
+    	std::ifstream Words;Words.open("words.txt");if (Words.is_open()){while(!Words.eof()){getline(Words,sub);//open and read vocabulary,Initiate subconscious loop//the subconscious loop runs consistently and serves up/is requested by the conscious mind, information via mechanisms in place to support that(those) function(s)
+    	if(/*sub[0] == level[level.length()-1] &&*//* rand() % 3000 - 1 == 1){//the first conditional determines whether a word accessed from the vocabulary meets required logic linking system criteria//add rand select function//this randomization function serves to alternate word,concept and possibly idea access and processing timings, randomly.
+std::cout << "Conscious: " << level << endl << "Subconscious: " << sub << std::endl;//Displays a word from subconscious
+std::cout << "Choosing which concepts to enrich" << std::endl;	//concept analysis(select)//an analysis of stored concepts is made against requisites of primarily, the 'AI Control Logic Preference', then, Secondarily the 'AI Preference Logic System' in order to determine concept enrichment// AI Control logic Preference+(AI Mandate?)(Ethics?)(*Within concepts, can direct analysis)
+//go through ideas,thought, concepts and mandates,check to see if and concepts,thoughts or ideas have mandates, work on mandates if true or continue searching if mandate progress stalls else continue searching
+std::cout << "Retrieving concept of level" << std::endl;	//get concept of level//this function brings information from the subconscious into observation of higher level, perhaps conscious cognition systems
+if (LocateConcept > -1){//LocatedConcept = concept;
+	//web access...
+	//add more recognition ways, perhaps programmable disctinction systems
+	//curl? //access dictionary to get word concept/meaning
+	std::cout << "Searching for concept from word risen from sub" << std::endl;	//find concept of sub//this function,by potentially many methods of retrieval, tries to locate concepts strictly or tangably related to information served up by or requested to the subconscious
+//locate concept ending
+//web access...
+//add more recognition ways, perhaps programmable disctinction systems
+	//access dictionary to get word concept/meaning
+std::cout << "Thinking dev test 1";	//concept match //(sorting and storing)//information is sorted via either explicit or tangable relationships to one another
+//linguistics engine be prep//logic engine be prep//description//function//etc...
+//standard Processknowledge activity//make dynamic
+//cout << modsprep;
+//std::cout << std::endl << mods << std::endl;
+//	mods = "rabbet=:spelt incorrectly:furry:stereo typically eats carrots:;laager=:drinkable:test( i know it is not a drink... this is for demo purposes.....):brown:alcohol:fizzy:;hose=:connectable:long:green:;e-mail=:digital:fast:letter:typed:written:;tap=:brown:connectable:mechanical:;end poverty=:surplus food:surplus housing:decrease product cost:;";
+//std::cout << mods;
+	if (searchstart > -1 && searchstart2 > -1){ // changeable
+//		std::cout << "gmod:" << Gmod << " " << Gmod2;
+			//searchstart = mods.find(searchfor);
+					//sub
+					//action ;D
+				//std::cout << std::endl << MODL << " " << MODS;
+    //----------------------------Cognition---------------------------------------
+    //once cognition stage is reached, free access to the program components is allowed logically,componentify basic code for easy access(TODO much later...)
+    //3mechanism systems//consciousness ~opcode processing
+    //5programmable disctinction systems
+    //4recognition systems
+    //2logic generation
+    //reference body(psychology for starters)e.g "how think",semantic introspection of object body with content from reference acting on context of focus(knowledgebase selection)
+    //notes:
+    *=(how answer-> action for AI? at varying levels of intended capability)//describe potential solution....
+    //lives contrast social level better level terms question key. provide feed between engage .election?. that causes levels not seem believable. bias are economic good have top predicted levels, better different influence cognitive thinking own down own styles
+    //choose knowledgebase
+        //logic system basic representation//basic story
+      //processTool = "conscious";
+       // cout << "Entropy:";
+     //   cin >> ent;
+       // cout <<  endl;
+      //  cout << " " << key << " ";
+        //logout <<  endl << Logicthinkdescribe << endl;
+      //  string OUTPUTSTR = processKnowledge(Logicthinkdescribe,processTool.c_str());
+        //how think//cycle
+// cout << endl << "OUTPUT:" <<  OUTPUTSTR << endl;
+//        File2.close();
+        // File2.open(filename.c_str());
+        //  File2.close();
+//ifstream File2;
+//cout << word1  << endl << line;
+       // key = word1;
+      //  int A = userinputA.find(" "),B = userinputA.find(" ",A+1);
+       // getline(cin,userinputA);
+        //string wordA = userinputA.substr(A,B-A);
+//if (B < userinputA.length()-3){
+//        A = userinputA.find(" ",A+1),B = userinputA.find(" ",B+1);
+//}
+       // cout << wordA << endl;
+  //      key = wordA;
+                //cout << endl << "Age of being(cycles): " << AGE << " Experience: " << LINEFULL.length()/10000 << endl;
+           // string B,BB,C;
+//CORE PROTECTION
+//-----------------------------------------------------------------------------------------------------------------------------
+          //  processTool = Core.substr(s1+1,s2-s1-1);
+//cout << processTool;
+            //cout << endl << endl << processToolprev << " ==> " <<  processTool << endl;
+//cout << endl << "Function:";
+//getline(cin,xoxo);
+      // key = newrequest;
+   // cout << endl;
+//cout << Logicthinkdescribe;
+//cout << userinput;
+           // Logicthinkdescribe = structarray[count1] + " " + key + "?";
+         //   count1++;
+           //   if (count1== 2){
+             //   count1 = 0;
+              //}
+          //  CHOICE = true;
+ //}
+          //  cout << " " << key << " " << endl;
+  //         cout << Logicthinkdescribe << endl;
+            // }
+            //ho,w think//cycle
+//            File2.open(filename.c_str());
+          //    cout << Sout;
+             //    cout << num;
+//                getline(File2,line);
+//cout << length1 << " " << length2;
+                //   while (!infile2.eof())
+                //    {
+                //       getline(infile2,F);
+                //       D += F;
+                // }
+//E = sha512(D);
+//}
+                //  if (E != EE)
+                //   {
+//while (0==0){
+                //    }
+                //    infile2.close();
+//            File2.close();
+            //   File2.open(filename.c_str());
+            //   File2.close();
+            //processToolprev = processTool;
+            //s1 = s2;
+           // if (s2 + 3 > Core.length())
+            //{
+              //  s1 = 0,s2 = 0;
+            //}
+      //     if (Q == 1){
+       //  cout << key << " ";
+         // }
+        //      if (Q = 1){
+        //    Q = 0;
+      //     }
+//-----------------------------------------------------------------------------------------------------------------------------
+//cout << endl << "Stability error!" << endl;
+//break;
+//cout << CC;
+    //	cout << endl;
+    //question subject matter of describe
+    //add how, add answer,add describe
+    //1 relationship systems
+    //add to concept
+    //cout << mods << endl;
+    //-----------------------------------------------------------------------------
+    //search level mods
+    //search sub(word) mods
+    //is ....
+    //store
+    //concept v.s conceptfromsub
+    //datapoints
+    //sorting gain list, special tally(programmable)
+    std::cout << std::endl << "Processing thought" << std::endl;	//add concept if not exist//if concept match, add thought to concept xN//this function produces information after set conditionals,appied logic systems,ethics and mandates processing into categories 'concept', 'thought' and 'idea' and inserts any form of label (sets)
+    //generate word, sub,level, linguistics engine,logic engine
+    presentthought = "{" + sub + " " + level + "}:";//simple word addition for concept proposal/label()
+    std::cout << "connecting and traversing ideas components & mechanisms    (concept test):" << presentthought;//if the ability to travese ideas is disabled the AI can no longer grow in terms of intellectual capacity
+    //search for and process meanings of mandate, cross reference to thought, if simmilar via modifiers var 50% match per proportion, then generate via idea
+    // check to see if meets ethics requiements
+    //does concept agree to mandates?
+    // check if thought not exist
+    //status, success or fail,exit thought upon fail of ethics
+    std::cout << std::endl << "Storing data" << std::endl;	//information management	//(sorting and storing)//this function stores sorted and generated information into permanent or semi-permanent data storage devices
+    std::cout << "Deciding whether to diverge information branches" << std::endl;	//concept analysis & comparision (diverge? continue?)//this function determines if a task of higher priority is unattended to(possibly due to insufficient information) or if the learning dynamics are not properly being utilised so the attention of objects can diverge into more prosperous activity
+    //continue working on thought/idea/concept yada yada yada
+    //continue
+    std::cout << "Deciding whether to publish idea to storage/simulation" << std::endl << std::endl;	//if concept ideal, add thought to an idea(have blank idea spaces for starting ideas)//this function, depending on configuration either determines whether an idea is ready for simulation and stores it or lets a user decide if an idea is ready for simulation and store it
+    level = sub;//before or after staging sim
+    //(concept?)/idea staging sim// AIControlLogicIteration
+    }}goto Begin;}//cycle
+//free will
