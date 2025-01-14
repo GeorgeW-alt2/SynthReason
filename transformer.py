@@ -8,42 +8,9 @@ import torch.nn.functional as F
 
 EPOCHS = 50
 KB_MEMORY_UNCOMPRESSED = 30000
-setting = 1280
+setting = 128
 file_path = "model.pt"
 
-# Concept Locator Class
-class ConceptLocator:
-    def __init__(self, latent_dim=128):
-        # Latent space to represent abstract concepts
-        self.latent_space =   torch.nn.Linear(latent_dim, latent_dim) # Randomly initialized
-        self.mapping_function = torch.randn(latent_dim, latent_dim) # Mapping for inference
-
-    def encode_concept(self, input_data):
-        """
-        Encode input into latent space.
-        """
-        if isinstance(input_data, (list, np.ndarray, torch.Tensor)):
-            input_tensor = torch.tensor(input_data, dtype=torch.float32)
-        else:
-            raise ValueError("Unsupported input type for encoding.")
-
-        # Normalize and map input to latent space
-        normalized_input = F.normalize(input_tensor, dim=0)
-        latent_representation = self.mapping_function(normalized_input)
-        return latent_representation
-
-    def find_related_concepts(self, query_vector, threshold=0.2):
-        """
-        Search for related concepts in the latent space.
-        """
-        query_vector = F.normalize(query_vector, dim=-1)
-        similarity_scores = torch.mm(self.latent_space.t()[-1],query_vector.unsqueeze(0) )
-        
-        # Identify indices of concepts above the threshold
-        related_indices = torch.where(query_vector > F.normalize(similarity_scores, dim=-1))[0]
-        return related_indices
-        
-# Text Preprocessor Class
 class TextPreprocessor:
     def __init__(self):
         self.word_to_index = None
@@ -98,7 +65,6 @@ class TextPreprocessor:
             
         return torch.LongTensor(X), torch.LongTensor(y)
 
-# Text Generator Class
 class TextGenerator(nn.Module):
     def __init__(self, vocab_size, embedding_dim, hidden_dim, word_to_index, num_layers=1):
         super(TextGenerator, self).__init__()
@@ -134,13 +100,11 @@ class TextGenerator(nn.Module):
         
         return logits
 
-# Text Generator Handler Class
 class TextGeneratorHandler:
     def __init__(self):
         self.model = None
         self.preprocessor = TextPreprocessor()
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.concept_locator = ConceptLocator()  # Initialize ConceptLocator
     
     def train(self, text, sequence_length=3, batch_size=32, epochs=EPOCHS, learning_rate=0.001):
         # Build vocabulary
@@ -184,7 +148,6 @@ class TextGeneratorHandler:
             if (epoch + 1) % 5 == 0:
                 print(f'Epoch [{epoch+1}/{epochs}], Loss: {total_loss/len(data_loader):.4f}')
     
-
     def generate_text(self, seed_text, num_words=50, temperature=0.7):
         self.model.eval()
         words = self.preprocessor.preprocess_text(seed_text)  # Keep last 3 words as context
@@ -226,9 +189,6 @@ class TextGeneratorHandler:
                 sequence = torch.LongTensor([sequence]).to(self.device)
         
         return ' '.join(words)
-
-
-
     
     def save_model(self, file_path):
         """Save the model and preprocessor to a file."""
@@ -297,18 +257,26 @@ def main():
                     print(f"\nSeed text: {seed_text}")
                     print(f"Generated text: {generated_text}")
             except Exception as e:
-                print(f"Error during text generation: {str(e)}")
+                print(f"Error generating text: {str(e)}")
         
         elif choice == '3':
-            save_file = input("Enter filename to save the model: ")
-            handler.save_model(save_file)
+            try:
+                handler.save_model(file_path)
+            except Exception as e:
+                print(f"Error saving model: {str(e)}")
         
         elif choice == '4':
-            load_file = input("Enter filename to load the model: ")
-            handler.load_model(load_file)
+            try:
+                handler.load_model(file_path)
+            except Exception as e:
+                print(f"Error loading model: {str(e)}")
         
         elif choice == '5':
+            print("Exiting...")
             break
+        
+        else:
+            print("Invalid choice. Please try again.")
 
 if __name__ == "__main__":
     main()
