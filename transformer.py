@@ -152,46 +152,48 @@ class TextGeneratorHandler:
     
     def generate_text(self, seed_text, num_words=50, temperature=0.7):
         self.model.eval()
-        words = self.preprocessor.preprocess_text(seed_text)  # Keep last 3 words as context
-        sequence = [self.preprocessor.get_word_index(w) for w in words]
-        sequence = torch.LongTensor([sequence]).to(self.device)
+        device = self.device
+        
+        # Preprocess the seed text and get the initial sequence
+        words = self.preprocessor.preprocess_text(seed_text)
+        # Ensure we have at least 3 words for the sequence
+        while len(words) < 3:
+            words.append(self.preprocessor.pad_token)
+        
+        sequence = [self.preprocessor.get_word_index(w) for w in words[-3:]]  # Take last 3 words
+        sequence = torch.tensor([sequence], dtype=torch.long).to(device)
+        
+        generated_words = words[:]
         
         with torch.no_grad():
             for _ in range(num_words):
-                output = self.model(sequence)
-                output = output.div(temperature)  # Apply temperature for randomness
-                probabilities = torch.exp(output)  # Convert log probabilities back to probabilities
+                # Get model predictions
+                logits = self.model(sequence)
                 
-                # Sample two words and choose one from them
-                next_word_idx = torch.multinomial(probabilities[0], 2)  # Sample 2 words
+                # Apply temperature scaling
+                logits = logits / temperature
                 
-                # Extract the indices of the two sampled words
-                idx_1 = next_word_idx[0].item()
-                idx_2 = next_word_idx[1].item()
+                # Get probability distribution
+                probabilities = F.softmax(logits, dim=-1)
                 
-                # Get the probabilities for these two words
-                prob_word_1 = probabilities[0, _].item()
-                prob_word_2 = probabilities[0, idx_2].item()
+                # Sample next word index
+                next_word_idx = torch.multinomial(probabilities, 1).item()
                 
-                # Use np.max to get the index of the word with the highest probability
-                max_prob_idx = np.argmax([prob_word_1, prob_word_2])
-                
-                # Choose the index of the word with the highest probability
-                next_word_idx = next_word_idx[max_prob_idx].item()
-
-                # Convert index to word using the preprocessor
-                next_word = self.preprocessor.index_to_word[next_word_idx]
+                # Convert index to word
+                next_word = self.preprocessor.index_to_word.get(next_word_idx, self.preprocessor.unknown_token)
                 
                 # Avoid adding unknown or padding tokens
                 if next_word not in {self.preprocessor.unknown_token, self.preprocessor.pad_token}:
-                    words.append(next_word)
+                    generated_words.append(next_word)
                 
-                # Update the sequence with the latest word
-                sequence = [self.preprocessor.get_word_index(w) for w in words[-3:]]
-                sequence = torch.LongTensor([sequence]).to(self.device)
+                # Update sequence with the latest 3 words for next iteration
+                sequence = torch.tensor([[
+                    self.preprocessor.get_word_index(w) 
+                    for w in generated_words[-3:]
+                ]], dtype=torch.long).to(device)
         
-        return ' '.join(words)
-    
+        return ' '.join(generated_words)
+
     def save_model(self, file_path):
         """Save the model and preprocessor to a file."""
         if self.model is None:
