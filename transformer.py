@@ -7,8 +7,8 @@ import os
 import torch.nn.functional as F
 
 EPOCHS = 50
-KB_MEMORY_UNCOMPRESSED = 30000
-setting = 128
+KB_MEMORY_UNCOMPRESSED = 40000
+setting = 512
 file_path = "model.pt"
 
 class TextPreprocessor:
@@ -111,11 +111,7 @@ class TextGeneratorHandler:
         self.preprocessor.build_vocabulary(text)
         
         # Prepare sequences
-        X, y = self.preprocessor.create_sequences(text, sequence_length)
-        
-        # Create DataLoader
-        dataset = torch.utils.data.TensorDataset(X, y)
-        data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
         
         # Initialize model
         self.model = TextGenerator(
@@ -132,9 +128,15 @@ class TextGeneratorHandler:
         for epoch in range(epochs):
             self.model.train()
             total_loss = 0
+            X, y = self.preprocessor.create_sequences(' '.join(np.roll(text.split(),shift = epoch)), sequence_length)
+        
+            # Create DataLoader
+            dataset = torch.utils.data.TensorDataset(X, y)
+            data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
             for batch_X, batch_y in data_loader:
                 batch_X, batch_y = batch_X.to(self.device), batch_y.to(self.device)
                 
+
                 optimizer.zero_grad()
                 output = self.model(batch_X)
                 loss = criterion(output, batch_y)
@@ -168,7 +170,7 @@ class TextGeneratorHandler:
                 idx_2 = next_word_idx[1].item()
                 
                 # Get the probabilities for these two words
-                prob_word_1 = probabilities[0, idx_1].item()
+                prob_word_1 = probabilities[0, _].item()
                 prob_word_2 = probabilities[0, idx_2].item()
                 
                 # Use np.max to get the index of the word with the highest probability
