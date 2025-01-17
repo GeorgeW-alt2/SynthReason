@@ -7,7 +7,7 @@ import os
 import torch.nn.functional as F
 
 EPOCHS = 50
-KB_MEMORY_UNCOMPRESSED = 40000
+KB_MEMORY_UNCOMPRESSED = 10000
 setting = 512
 file_path = "model.pt"
 
@@ -128,7 +128,7 @@ class TextGeneratorHandler:
         for epoch in range(epochs):
             self.model.train()
             total_loss = 0
-            X, y = self.preprocessor.create_sequences(' '.join(np.roll(text.split(),shift = epoch)), sequence_length)
+            X, y = self.preprocessor.create_sequences(text, sequence_length)
         
             # Create DataLoader
             dataset = torch.utils.data.TensorDataset(X, y)
@@ -138,6 +138,7 @@ class TextGeneratorHandler:
                 
 
                 optimizer.zero_grad()
+                batch_X = torch.tensor(np.roll(batch_X, shift = batch_X[-1]))
                 output = self.model(batch_X)
                 loss = criterion(output, batch_y)
                 
@@ -153,46 +154,46 @@ class TextGeneratorHandler:
     def generate_text(self, seed_text, num_words=50, temperature=0.7):
         self.model.eval()
         device = self.device
-        
+
         # Preprocess the seed text and get the initial sequence
         words = self.preprocessor.preprocess_text(seed_text)
         # Ensure we have at least 3 words for the sequence
         while len(words) < 3:
             words.append(self.preprocessor.pad_token)
-        
+
         sequence = [self.preprocessor.get_word_index(w) for w in words[-3:]]  # Take last 3 words
         sequence = torch.tensor([sequence], dtype=torch.long).to(device)
-        
+
         generated_words = words[:]
-        
+        logits = self.model(sequence)
+
+        # Apply temperature scaling
+        logits = logits / temperature
+
+        # Get probability distribution
+        probabilities = F.softmax(logits, dim=-1)
         with torch.no_grad():
             for _ in range(num_words):
                 # Get model predictions
-                logits = self.model(sequence)
-                
-                # Apply temperature scaling
-                logits = logits / temperature
-                
-                # Get probability distribution
-                probabilities = F.softmax(logits, dim=-1)
-                
+
                 # Sample next word index
                 next_word_idx = torch.multinomial(probabilities, 1).item()
-                
+                probabilities = torch.tensor(np.roll(probabilities.cpu().numpy(), shift=sequence[-1]), dtype=torch.float32)
                 # Convert index to word
                 next_word = self.preprocessor.index_to_word.get(next_word_idx, self.preprocessor.unknown_token)
-                
+
                 # Avoid adding unknown or padding tokens
                 if next_word not in {self.preprocessor.unknown_token, self.preprocessor.pad_token}:
                     generated_words.append(next_word)
-                
+
                 # Update sequence with the latest 3 words for next iteration
                 sequence = torch.tensor([[
                     self.preprocessor.get_word_index(w) 
                     for w in generated_words[-3:]
                 ]], dtype=torch.long).to(device)
-        
+
         return ' '.join(generated_words)
+
 
     def save_model(self, file_path):
         """Save the model and preprocessor to a file."""
