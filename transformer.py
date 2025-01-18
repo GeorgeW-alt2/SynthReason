@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 import numpy as np
@@ -7,8 +6,8 @@ from torch.utils.data import Dataset, DataLoader
 import os
 import torch.nn.functional as F
 
-EPOCHS = 5
-KB_MEMORY_UNCOMPRESSED = 1000
+EPOCHS = 50
+KB_MEMORY_UNCOMPRESSED = 10000
 setting = 512
 file_path = "model.pt"
 
@@ -46,15 +45,7 @@ class TextPreprocessor:
         return self.word_to_index.get(word, self.word_to_index[self.unknown_token])
 
     def create_sequences(self, text, sequence_length=3):
-        """Convert text into sequences for training.
-        
-        Args:
-            text: Input text to be converted into sequences
-            sequence_length: Length of each input sequence
-            
-        Returns:
-            tuple: (X, y) where X contains input sequences and y contains target tokens
-        """
+        """Convert text into sequences for training."""
         tokens = self.preprocess_text(text)
         
         # Handle unknown tokens
@@ -63,17 +54,15 @@ class TextPreprocessor:
         X = []
         y = []
         
-        num_sequences = len(indices) - sequence_length - 1
+        num_sequences = len(indices) - sequence_length
         if num_sequences <= 0:
             raise ValueError("Text is too short for the given sequence length")
         
-        # Create X sequences using a sliding window
         for i in range(num_sequences):
-            for j in range(num_sequences):
-                sequence = indices[i:i + sequence_length + 1]  # Include target token in sequence
-                X.append(sequence)  # All but last token for input
-                y.append(X[-j][-1])   # Last token for target
-        
+            sequence = indices[i:i + sequence_length]
+            X.append(sequence)
+            y.append(indices[i + sequence_length])
+            
         return torch.LongTensor(X), torch.LongTensor(y)
 
 class TextGenerator(nn.Module):
@@ -158,8 +147,9 @@ class TextGeneratorHandler:
                 optimizer.step()
                 
                 total_loss += loss.item()
-
-            print(f'Epoch [{epoch+1}/{epochs}], Loss: {total_loss/len(data_loader):.4f}')
+            
+            if (epoch + 1) % 5 == 0:
+                print(f'Epoch [{epoch+1}/{epochs}], Loss: {total_loss/len(data_loader):.4f}')
     
     def generate_text(self, seed_text, num_words=50, temperature=0.7):
         self.model.eval()
@@ -171,7 +161,7 @@ class TextGeneratorHandler:
         while len(words) < 3:
             words.append(self.preprocessor.pad_token)
 
-        sequence = [self.preprocessor.get_word_index(w) for w in words]  # Take last 3 words
+        sequence = [self.preprocessor.get_word_index(w) for w in words[-3:]]  # Take last 3 words
         sequence = torch.tensor([sequence], dtype=torch.long).to(device)
 
         generated_words = words[:]
@@ -199,7 +189,7 @@ class TextGeneratorHandler:
                 # Update sequence with the latest 3 words for next iteration
                 sequence = torch.tensor([[
                     self.preprocessor.get_word_index(w) 
-                    for w in generated_words
+                    for w in generated_words[-3:]
                 ]], dtype=torch.long).to(device)
 
         return ' '.join(generated_words)
