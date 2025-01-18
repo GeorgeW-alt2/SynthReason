@@ -1,7 +1,9 @@
 import random
 import re
 from typing import List, Dict, Set, Tuple
-KB_MEMORY = 999999
+
+KB_MEMORY = -1
+
 class SemanticGenerator:
     def __init__(self):
         self.templates = []
@@ -14,6 +16,10 @@ class SemanticGenerator:
             'determiners': set(['the', 'a', 'an', 'this', 'that', 'these', 'those', 'my', 'your', 'their'])
         }
         self.endings = {'.', '!', '?'}
+        
+    def add_input_text(self, text: str) -> None:
+        """Add new input text and learn from it."""
+        self.learn_from_text(text)
         
     def learn_from_text(self, text: str) -> None:
         """Learn patterns and words from input text."""
@@ -82,7 +88,7 @@ class SemanticGenerator:
             elif i > 0 and words[i-1].lower() in self.words['determiners']:
                 template.append(('NOUN', word))
                 self.words['nouns'].add(clean_word)
-            elif i > 0 and template[-1][0] == 'NOUN':
+            elif i > 0 and template and template[-1][0] == 'NOUN':
                 template.append(('VERB', word))
                 self.words['verbs'].add(clean_word)
             else:
@@ -149,18 +155,24 @@ class SemanticGenerator:
         """Generate multiple sentences."""
         return ' '.join(self.generate_sentence() for _ in range(num_sentences))
 
-# Example usage
-if __name__ == "__main__":
-    # Create generator
+def run_interactive():
+    """Run interactive text input session."""
     generator = SemanticGenerator()
     
-    # Sample text to learn from
-    with open("xaa", "r", encoding="utf-8") as f:
-        text = ' '.join(f.read().split())[:KB_MEMORY]
+    print("Welcome to the Semantic Text Generator!")
     
-    # Learn patterns
-    generator.learn_from_text(text)
-    
-    # Generate new text
-    print("\nGenerated text:")
-    print(generator.generate_text(103))
+    # Try to load base text if available
+    try:
+        with open("xaa", "r", encoding="utf-8") as f:
+            text = ' '.join(f.read().split())[:KB_MEMORY]
+            generator.learn_from_text(text)
+            print("\nLoaded base patterns from file.")
+    except FileNotFoundError:
+        print("\nNo base file found. Starting with empty patterns.")
+
+    while True:     
+        generator.add_input_text(input("User: " ))      
+        print(generator.generate_text(10))
+
+if __name__ == "__main__":
+    run_interactive()
