@@ -1,5 +1,6 @@
 import random
 import re
+import pickle
 from typing import List, Dict, Tuple, Any
 from collections import Counter
 
@@ -163,6 +164,40 @@ class SemanticGenerator:
     def generate_text(self, num_sentences: int = 3) -> str:
         """Generate multiple sentences."""
         return ' '.join(self.generate_sentence() for _ in range(num_sentences))
+    
+    def dump_probabilities(self, filename: str = 'semantic_generator_probabilities.pkl'):
+        """
+        Dump word probabilities and word indices to a pickle file.
+        
+        :param filename: Name of the pickle file to save probabilities
+        """
+        # Prepare a dictionary to store probabilities and indices
+        probabilities_dict = {}
+        
+        for category, counter in self.words.items():
+            # Calculate total count for the category
+            total = sum(counter.values())
+            
+            # Create a list of (word, probability, index) tuples
+            category_list = []
+            for word, count in counter.items():
+                probability = count / total
+                index = list(counter.keys()).index(word)
+                category_list.append((word, probability, index))
+            
+            # Sort the list by index to maintain original order
+            category_list.sort(key=lambda x: x[2])
+            
+            probabilities_dict[category] = category_list
+        
+        # Dump templates as well
+        probabilities_dict['templates'] = self.templates
+        
+        # Save to pickle file
+        with open(filename, 'wb') as f:
+            pickle.dump(probabilities_dict, f)
+        
+        print(f"Probabilities dumped to {filename}")
 
 def run_interactive():
     """Run interactive text input session."""
@@ -172,7 +207,7 @@ def run_interactive():
     
     # Try to load base text if available
     try:
-        with open("xaa", "r", encoding="utf-8") as f:
+        with open("test.txt", "r", encoding="utf-8") as f:
             text = ' '.join(f.read().split())[:KB_MEMORY]
             generator.learn_from_text(text)
             print("\nLoaded base patterns from file.")
@@ -186,6 +221,9 @@ def run_interactive():
             break
         generator.add_input_text(user_input)      
         print(generator.generate_text(10))
+        
+        # Optional: Dump probabilities after each input
+        generator.dump_probabilities()
 
 if __name__ == "__main__":
     run_interactive()
