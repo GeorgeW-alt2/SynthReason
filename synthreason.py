@@ -1,6 +1,7 @@
 import random
 import re
-from typing import List, Dict, Set, Tuple
+from typing import List, Dict, Tuple, Any
+from collections import Counter
 
 KB_MEMORY = -1
 
@@ -8,14 +9,27 @@ class SemanticGenerator:
     def __init__(self):
         self.templates = []
         self.words = {
-            'nouns': set(),
-            'verbs': set(),
-            'adjectives': set(),
-            'adverbs': set(),
-            'prepositions': set(['in', 'on', 'at', 'through', 'under', 'over', 'with', 'by']),
-            'determiners': set(['the', 'a', 'an', 'this', 'that', 'these', 'those', 'my', 'your', 'their'])
+            'nouns': Counter(),
+            'verbs': Counter(),
+            'adjectives': Counter(),
+            'adverbs': Counter(),
+            'prepositions': Counter({'in': 1, 'on': 1, 'at': 1, 'through': 1, 
+                                   'under': 1, 'over': 1, 'with': 1, 'by': 1}),
+            'determiners': Counter({'the': 1, 'a': 1, 'an': 1, 'this': 1, 
+                                  'that': 1, 'these': 1, 'those': 1, 'my': 1, 
+                                  'your': 1, 'their': 1})
         }
         self.endings = {'.', '!', '?'}
+        
+    def weighted_choice(self, counter: Counter) -> str:
+        """Select a word based on its frequency weight."""
+        if not counter:
+            return ""
+        words = list(counter.keys())
+        weights = list(counter.values())
+        total = sum(weights)
+        probabilities = [w/total for w in weights]
+        return random.choices(words, weights=probabilities, k=1)[0]
         
     def add_input_text(self, text: str) -> None:
         """Add new input text and learn from it."""
@@ -23,40 +37,28 @@ class SemanticGenerator:
         
     def learn_from_text(self, text: str) -> None:
         """Learn patterns and words from input text."""
-        # Clean and split text into sentences
         sentences = self._split_into_sentences(text)
-        
         for sentence in sentences:
-            # Extract and store the sentence template
             template = self._extract_template(sentence)
             if template:
                 self.templates.append(template)
-            
-            # Categorize and store words
             words = sentence.lower().split()
             self._categorize_words(words)
     
     def _split_into_sentences(self, text: str) -> List[str]:
         """Split text into sentences while handling common abbreviations."""
-        # Remove extra whitespace
         text = ' '.join(text.split())
-        
-        # Split on sentence endings while preserving them
         sentences = []
         current = []
         
         words = text.split()
         for i, word in enumerate(words):
             current.append(word)
-            
-            # Check if word ends with sentence ending
             if any(word.endswith(end) for end in self.endings):
-                # Check if it's not an abbreviation
                 if not (len(word) <= 3 and word[0].isupper()):
                     sentences.append(' '.join(current))
                     current = []
                     
-        # Add any remaining text
         if current:
             sentences.append(' '.join(current))
             
@@ -70,27 +72,26 @@ class SemanticGenerator:
         i = 0
         while i < len(words):
             word = words[i].lower()
-            
-            # Remove punctuation for matching
             clean_word = word.rstrip('.,!?')
             
-            # Try to identify word type
             if clean_word in self.words['determiners']:
                 template.append(('DET', word))
+                self.words['determiners'][clean_word] += 1
             elif clean_word.endswith(('ly')) and len(clean_word) > 2:
                 template.append(('ADV', word))
-                self.words['adverbs'].add(clean_word)
+                self.words['adverbs'][clean_word] += 1
             elif clean_word.endswith(('ed', 'ing')):
                 template.append(('VERB', word))
-                self.words['verbs'].add(clean_word)
+                self.words['verbs'][clean_word] += 1
             elif clean_word in self.words['prepositions']:
                 template.append(('PREP', word))
+                self.words['prepositions'][clean_word] += 1
             elif i > 0 and words[i-1].lower() in self.words['determiners']:
                 template.append(('NOUN', word))
-                self.words['nouns'].add(clean_word)
+                self.words['nouns'][clean_word] += 1
             elif i > 0 and template and template[-1][0] == 'NOUN':
                 template.append(('VERB', word))
-                self.words['verbs'].add(clean_word)
+                self.words['verbs'][clean_word] += 1
             else:
                 template.append(('WORD', word))
             
@@ -103,48 +104,56 @@ class SemanticGenerator:
         for i, word in enumerate(words):
             clean_word = word.lower().rstrip('.,!?')
             
-            # Skip already categorized words
-            if any(clean_word in wordset for wordset in self.words.values()):
+            # Skip words already strongly categorized
+            max_freq = 0
+            word_category = None
+            for category, counter in self.words.items():
+                if clean_word in counter:
+                    if counter[clean_word] > max_freq:
+                        max_freq = counter[clean_word]
+                        word_category = category
+            
+            if max_freq > 0:
+                if word_category:
+                    self.words[word_category][clean_word] += 1
                 continue
                 
-            # Apply basic categorization rules
+            # Apply categorization rules
             if word.endswith(('ly')) and len(word) > 2:
-                self.words['adverbs'].add(clean_word)
+                self.words['adverbs'][clean_word] += 1
             elif word.endswith(('ed', 'ing')):
-                self.words['verbs'].add(clean_word)
+                self.words['verbs'][clean_word] += 1
             elif i > 0 and words[i-1].lower() in self.words['determiners']:
-                self.words['nouns'].add(clean_word)
+                self.words['nouns'][clean_word] += 1
     
     def generate_sentence(self) -> str:
         """Generate a new sentence using learned patterns."""
         if not self.templates:
             return "No patterns learned yet."
             
-        # Choose a random template
         template = random.choice(self.templates)
-        
-        # Generate sentence from template
         sentence_parts = []
+        
         for word_type, original in template:
             if word_type == 'DET':
-                sentence_parts.append(random.choice(list(self.words['determiners'])))
+                word = self.weighted_choice(self.words['determiners'])
+                sentence_parts.append(word if word else original)
             elif word_type == 'NOUN':
-                sentence_parts.append(random.choice(list(self.words['nouns'])))
+                word = self.weighted_choice(self.words['nouns'])
+                sentence_parts.append(word if word else original)
             elif word_type == 'VERB':
-                sentence_parts.append(random.choice(list(self.words['verbs'])))
+                word = self.weighted_choice(self.words['verbs'])
+                sentence_parts.append(word if word else original)
             elif word_type == 'ADV':
-                if self.words['adverbs']:
-                    sentence_parts.append(random.choice(list(self.words['adverbs'])))
-                else:
-                    sentence_parts.append(original)
+                word = self.weighted_choice(self.words['adverbs'])
+                sentence_parts.append(word if word else original)
             elif word_type == 'PREP':
-                sentence_parts.append(random.choice(list(self.words['prepositions'])))
+                word = self.weighted_choice(self.words['prepositions'])
+                sentence_parts.append(word if word else original)
             else:
                 sentence_parts.append(original)
         
         sentence = ' '.join(sentence_parts)
-        
-        # Ensure proper capitalization and ending
         sentence = sentence[0].upper() + sentence[1:]
         if not any(sentence.endswith(end) for end in self.endings):
             sentence += '.'
@@ -159,7 +168,7 @@ def run_interactive():
     """Run interactive text input session."""
     generator = SemanticGenerator()
     
-    print("Welcome to the Semantic Text Generator!")
+    print("Welcome to the Probabilistic Semantic Text Generator!")
     
     # Try to load base text if available
     try:
@@ -171,7 +180,11 @@ def run_interactive():
         print("\nNo base file found. Starting with empty patterns.")
 
     while True:     
-        generator.add_input_text(input("User: " ))      
+        user_input = input("User: ")
+        if user_input.lower() in ['quit', 'exit', 'bye']:
+            print("Goodbye!")
+            break
+        generator.add_input_text(user_input)      
         print(generator.generate_text(10))
 
 if __name__ == "__main__":
