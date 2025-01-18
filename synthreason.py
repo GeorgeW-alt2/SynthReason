@@ -213,17 +213,12 @@ def run_interactive():
             print("\nLoaded base patterns from file.")
     except FileNotFoundError:
         print("\nNo base file found. Starting with empty patterns.")
-
-    while True:     
-        user_input = input("User: ")
-        if user_input.lower() in ['quit', 'exit', 'bye']:
-            print("Goodbye!")
-            break
-        generator.add_input_text(user_input)      
-        print(generator.generate_text(10))
-        
-        # Optional: Dump probabilities after each input
-        generator.dump_probabilities()
+ 
+  
+    print(generator.generate_text(10))
+    
+    # Optional: Dump probabilities after each input
+    generator.dump_probabilities()
 
 if __name__ == "__main__":
     run_interactive()
