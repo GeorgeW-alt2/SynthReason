@@ -267,7 +267,7 @@ def train_probs():
     
     # Try to load base text if available
     try:
-        with open(input("Enter filename: ")) as f:
+        with open(input("Enter filename: "), 'r', encoding='iso-8859-1') as f:
             text = ' '.join(f.read().split())[:KB_MEMORY]
             generator.learn_from_text(text)
             print("\nLoaded base patterns from file.")
