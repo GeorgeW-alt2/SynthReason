@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 import numpy as np
 
 KB_MEMORY = -1
-
+filename = "test.txt"
 class SemanticGenerator:
     def __init__(self):
         self.templates = []
@@ -267,7 +267,7 @@ def train_probs():
     
     # Try to load base text if available
     try:
-        with open("test.txt", "r", encoding="utf-8") as f:
+        with open(filename, "r", encoding="utf-8") as f:
             text = ' '.join(f.read().split())[:KB_MEMORY]
             generator.learn_from_text(text)
             print("\nLoaded base patterns from file.")
