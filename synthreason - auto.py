@@ -397,13 +397,16 @@ class NaturalTextGenerator:
 
     def continue_text(self, input_text, num_words=10, temperature=0.7):
         """
-        Continue given text using forward context mechanism
+        Continue given text using forward context mechanism with sigmoid probability adjustment
         
         :param input_text: Text to continue
         :param num_words: Number of words to generate
         :param temperature: Controls randomness (lower = more deterministic)
         :return: Continued text
         """
+        def sigmoid(x):
+            return 1 / (1 + np.exp(-x))
+        
         # Tokenize input text
         words = input_text.lower().split()
         
@@ -419,12 +422,19 @@ class NaturalTextGenerator:
             if recent_context in self.forward_context:
                 next_word_probs = self.forward_context[recent_context]
                 
-                # Apply temperature
-                adjusted_probs = {
-                    word: np.power(prob, 1/temperature)
+                # Apply sigmoid transformation first
+                sigmoid_probs = {
+                    word: sigmoid(prob * temperature)
                     for word, prob in next_word_probs.items()
                 }
-                # Normalize
+                
+                # Then apply temperature scaling
+                adjusted_probs = {
+                    word: np.power(prob, 1/temperature)
+                    for word, prob in sigmoid_probs.items()
+                }
+                
+                # Normalize probabilities
                 total = sum(adjusted_probs.values())
                 adjusted_probs = {
                     word: prob/total 
