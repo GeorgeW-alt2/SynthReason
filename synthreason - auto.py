@@ -566,7 +566,7 @@ def main():
                         if not question:
                             continue
                             
-                        continued_text = generator.continue_text(generator.continue_text(user_input, num_words=150, temperature=0.5), num_words=150, temperature=0.5)
+                        continued_text = generator.continue_text(generator.continue_text(question, num_words=150, temperature=0.5), num_words=150, temperature=0.5)
                         print(f"Question: {question}")
                         print("AI:", continued_text)
                         print("-" * 50)
