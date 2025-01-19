@@ -301,7 +301,7 @@ class NaturalTextGenerator:
         
         # Add forward continuation context
         self.forward_context = defaultdict(lambda: defaultdict(float))
-        self.context_window = 8  # Number of words to consider for context
+        self.context_window = 4  # Number of words to consider for context
         
         # Preprocess categories and build language models
         self.categories = {}
