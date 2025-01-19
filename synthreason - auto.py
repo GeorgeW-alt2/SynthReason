@@ -358,7 +358,7 @@ class NaturalTextGenerator:
             bigram_counts[prev_word][curr_word] += 1
         
         # Normalize forward context probabilities
-        for context, next_words in self.transition_probabilities.items():
+        for context, next_words in self.forward_context.items():
             total = sum(next_words.values())
             self.forward_context[context] = {
                 word: count / total 
