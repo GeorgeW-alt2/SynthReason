@@ -301,7 +301,7 @@ class NaturalTextGenerator:
         
         # Add forward continuation context
         self.forward_context = defaultdict(lambda: defaultdict(float))
-        self.context_window = 3  # Number of words to consider for context
+        self.context_window = 8  # Number of words to consider for context
         
         # Preprocess categories and build language models
         self.categories = {}
@@ -554,7 +554,7 @@ def main():
                     user_input = input("User: ")
                     if user_input.lower() in ['quit', 'exit']:
                         break
-                    continued_text = generator.continue_text(generator.continue_text(user_input, num_words=150, temperature=0.5), num_words=150, temperature=0.5)
+                    continued_text = generator.continue_text(user_input, num_words=150, temperature=0.5)
                     print("AI:", continued_text)
                 except KeyboardInterrupt:
                     print("\nExiting...")
