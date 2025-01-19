@@ -10,15 +10,73 @@ class SemanticGenerator:
     def __init__(self):
         self.templates = []
         self.words = {
-            'nouns': Counter(),
-            'verbs': Counter(),
-            'adjectives': Counter(),
-            'adverbs': Counter(),
-            'prepositions': Counter({'in': 1, 'on': 1, 'at': 1, 'through': 1, 
-                                   'under': 1, 'over': 1, 'with': 1, 'by': 1}),
-            'determiners': Counter({'the': 1, 'a': 1, 'an': 1, 'this': 1, 
-                                  'that': 1, 'these': 1, 'those': 1, 'my': 1, 
-                                  'your': 1, 'their': 1})
+            'nouns': Counter({
+                'cat': 1, 'dog': 1, 'house': 1, 'tree': 1, 'car': 1, 
+                'book': 1, 'computer': 1, 'phone': 1, 'person': 1,
+                'time': 1, 'day': 1, 'year': 1, 'city': 1, 'world': 1,
+                'family': 1, 'friend': 1, 'food': 1, 'water': 1, 'life': 1,
+                'work': 1, 'school': 1, 'office': 1, 'home': 1, 'room': 1,
+                'door': 1, 'window': 1, 'table': 1, 'chair': 1, 'bed': 1,
+                'street': 1, 'road': 1, 'park': 1, 'garden': 1, 'store': 1,
+                'weather': 1, 'sun': 1, 'moon': 1, 'star': 1, 'sky': 1
+            }),
+            
+            'verbs': Counter({
+                'run': 1, 'walk': 1, 'jump': 1, 'sit': 1, 'stand': 1,
+                'eat': 1, 'drink': 1, 'sleep': 1, 'wake': 1, 'work': 1,
+                'play': 1, 'study': 1, 'read': 1, 'write': 1, 'speak': 1,
+                'listen': 1, 'watch': 1, 'look': 1, 'see': 1, 'hear': 1,
+                'think': 1, 'know': 1, 'understand': 1, 'learn': 1, 'teach': 1,
+                'make': 1, 'create': 1, 'build': 1, 'break': 1, 'fix': 1,
+                'open': 1, 'close': 1, 'start': 1, 'finish': 1, 'continue': 1,
+                'live': 1, 'die': 1, 'grow': 1, 'change': 1, 'move': 1
+            }),
+            
+            'adjectives': Counter({
+                'big': 1, 'small': 1, 'tall': 1, 'short': 1, 'long': 1,
+                'wide': 1, 'narrow': 1, 'thick': 1, 'thin': 1, 'heavy': 1,
+                'light': 1, 'fast': 1, 'slow': 1, 'hot': 1, 'cold': 1,
+                'warm': 1, 'cool': 1, 'new': 1, 'old': 1, 'young': 1,
+                'good': 1, 'bad': 1, 'happy': 1, 'sad': 1, 'angry': 1,
+                'bright': 1, 'dark': 1, 'beautiful': 1, 'ugly': 1, 'clean': 1,
+                'dirty': 1, 'rich': 1, 'poor': 1, 'strong': 1, 'weak': 1,
+                'hard': 1, 'soft': 1, 'loud': 1, 'quiet': 1, 'sweet': 1
+            }),
+            
+            'adverbs': Counter({
+                'quickly': 1, 'slowly': 1, 'carefully': 1, 'carelessly': 1,
+                'quietly': 1, 'loudly': 1, 'happily': 1, 'sadly': 1,
+                'easily': 1, 'hardly': 1, 'completely': 1, 'partially': 1,
+                'fully': 1, 'partly': 1, 'really': 1, 'actually': 1,
+                'generally': 1, 'specifically': 1, 'usually': 1, 'rarely': 1,
+                'always': 1, 'never': 1, 'often': 1, 'sometimes': 1,
+                'early': 1, 'late': 1, 'today': 1, 'tomorrow': 1,
+                'well': 1, 'badly': 1, 'fast': 1, 'slow': 1,
+                'here': 1, 'there': 1, 'everywhere': 1, 'nowhere': 1,
+                'inside': 1, 'outside': 1, 'forward': 1, 'backward': 1
+            }),
+            
+            'prepositions': Counter({
+                'in': 1, 'on': 1, 'at': 1, 'to': 1, 'from': 1,
+                'with': 1, 'without': 1, 'by': 1, 'near': 1, 'far': 1,
+                'through': 1, 'across': 1, 'between': 1, 'among': 1,
+                'around': 1, 'about': 1, 'against': 1, 'along': 1,
+                'behind': 1, 'beside': 1, 'besides': 1, 'during': 1,
+                'except': 1, 'for': 1, 'into': 1, 'like': 1,
+                'of': 1, 'off': 1, 'over': 1, 'since': 1,
+                'under': 1, 'until': 1, 'up': 1, 'upon': 1,
+                'above': 1, 'below': 1, 'within': 1, 'without': 1
+            }),
+            
+            'determiners': Counter({
+                'the': 1, 'a': 1, 'an': 1, 'this': 1, 'that': 1,
+                'these': 1, 'those': 1, 'my': 1, 'your': 1, 'his': 1,
+                'her': 1, 'its': 1, 'our': 1, 'their': 1, 'any': 1,
+                'some': 1, 'many': 1, 'few': 1, 'several': 1, 'each': 1,
+                'every': 1, 'all': 1, 'both': 1, 'either': 1, 'neither': 1,
+                'no': 1, 'another': 1, 'such': 1, 'what': 1, 'which': 1,
+                'whose': 1, 'enough': 1, 'much': 1, 'more': 1, 'most': 1
+            })
         }
         self.endings = {'.', '!', '?'}
         
