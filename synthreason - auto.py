@@ -554,7 +554,7 @@ def main():
                     questions = f.readlines()
                 
                 # Open log file in append mode
-                with open("continued_text_log.txt", "a", encoding="utf-8") as log:
+                with open("auto_text_log.txt", "a", encoding="utf-8") as log:
                     # Write timestamp at the start of the session
                     from datetime import datetime
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
