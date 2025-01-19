@@ -89,7 +89,7 @@ class SemanticGenerator:
         weights = list(counter.values())
         total = sum(weights)
         probabilities = [w/total for w in weights]
-        return random.choices(words, weights=probabilities, k=1)[0]
+        return random.choices(words, weights=probabilities, k=5)[0]
         
     def add_input_text(self, text: str) -> None:
         """Add new input text and learn from it."""
@@ -360,7 +360,7 @@ class NaturalTextGenerator:
         # Normalize forward context probabilities
         for context, next_words in self.forward_context.items():
             total = sum(next_words.values())
-            self.forward_context[context] = {
+            self.transition_probabilities[context] = {
                 word: count / total 
                 for word, count in next_words.items()
             }
@@ -476,7 +476,7 @@ class NaturalTextGenerator:
             
             # Apply temperature
             adjusted_probs = {
-                word: np.power(prob, 1/temperature)
+                word: np.power(prob, 1/-sum(probs.values()))
                 for word, prob in probs.items()
             }
             # Normalize
@@ -496,47 +496,7 @@ class NaturalTextGenerator:
         category = random.choice(categories)
         return self.weighted_choice(category)
     
-    def analyze_language_models(self):
-        """
-        Analyze and print details of language models
-        """
-        print("\nLanguage Model Analysis:")
-        
-        # Unigram analysis
-        print("\nTop 10 Unigram Probabilities:")
-        sorted_unigrams = sorted(
-            self.ngram_models['unigram'].items(), 
-            key=lambda x: x[1], 
-            reverse=True
-        )[:10]
-        for word, prob in sorted_unigrams:
-            print(f"{word}: {prob:.4f}")
-        
-        # Bigram analysis
-        print("\nSample Bigram Transition Probabilities:")
-        sample_bigrams = list(self.transition_probabilities.items())[:5]
-        for prev_word, transitions in sample_bigrams:
-            print(f"\nWord: {prev_word}")
-            sorted_transitions = sorted(
-                transitions.items(), 
-                key=lambda x: x[1], 
-                reverse=True
-            )[:5]
-            for next_word, prob in sorted_transitions:
-                print(f"  -> {next_word}: {prob:.4f}")
-        
-        # Forward context analysis
-        print("\nSample Forward Context Probabilities:")
-        sample_contexts = list(self.forward_context.items())[:3]
-        for context, next_words in sample_contexts:
-            print(f"\nContext: {' '.join(context)}")
-            sorted_next = sorted(
-                next_words.items(),
-                key=lambda x: x[1],
-                reverse=True
-            )[:5]
-            for word, prob in sorted_next:
-                print(f"  -> {word}: {prob:.4f}")
+   
 def main():
     while True:
         choice = input("Choose an option:\n1. Train new model\n2. Continue with existing model\nChoice (1/2): ").strip()
