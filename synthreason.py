@@ -527,17 +527,27 @@ class NaturalTextGenerator:
             )[:5]
             for word, prob in sorted_next:
                 print(f"  -> {word}: {prob:.4f}")
-
 def main():
     while True:
         choice = input("Choose an option:\n1. Train new model\n2. Continue with existing model\nChoice (1/2): ").strip()
-        generator = NaturalTextGenerator()
-
+        
         if choice == "1":
             train_probs()
-            # After training, initialize the generator with the new probabilities
+            try:
+                generator = NaturalTextGenerator()
+            except FileNotFoundError:
+                print("Error: Model file not created successfully. Please try again.")
+                continue
+                
         elif choice == "2":
-            # Main interaction loop - moved outside the if/elif blocks
+            try:
+                generator = NaturalTextGenerator()
+            except FileNotFoundError:
+                print("Error: No existing model file found (semantic_generator_probabilities.pkl)")
+                print("Please train a new model first using option 1.")
+                continue
+                
+            # Main interaction loop
             print("\nEntering text generation mode. Type your prompts:")
             while True:
                 try:
@@ -555,6 +565,6 @@ def main():
         else:
             print("Invalid choice. Exiting...")
             return
-    
+
 if __name__ == "__main__":
     main()
