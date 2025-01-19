@@ -1,188 +1,145 @@
+from typing import List, Dict, Tuple
+from dataclasses import dataclass
 import random
-import pickle
-from typing import List, Dict, Tuple, Set
-from collections import Counter, defaultdict
 import numpy as np
 
-class LogicalStatementGenerator:
+@dataclass
+class LogicalStatement:
+    statement: str
+    confidence: float
+    domain: str
+    evidence_strength: float
+    empirical_support: float
+    logical_necessity: float
+
+class HighConfidenceLogicGenerator:
     def __init__(self):
-        # Logical operators
-        self.operators = {
-            'unary': ['NOT', 'NECESSARILY', 'POSSIBLY'],
-            'binary': ['AND', 'OR', 'IMPLIES', 'IFF', 'XOR'],
-            'quantifiers': ['FORALL', 'EXISTS', 'UNIQUE']
-        }
-        
-        # Cognitive domain vocabularies
-        self.vocabulary = {
-            'concepts': Counter({
-                'knowledge': 1, 'belief': 1, 'truth': 1, 'perception': 1,
-                'consciousness': 1, 'thought': 1, 'memory': 1, 'learning': 1,
-                'reasoning': 1, 'intelligence': 1, 'understanding': 1,
-                'awareness': 1, 'attention': 1, 'intention': 1, 'decision': 1
-            }),
-            
-            'predicates': Counter({
-                'implies': 1, 'causes': 1, 'leads_to': 1, 'requires': 1,
-                'depends_on': 1, 'influences': 1, 'correlates_with': 1,
-                'precedes': 1, 'follows': 1, 'contains': 1, 'consists_of': 1,
-                'exhibits': 1, 'demonstrates': 1, 'manifests': 1, 'emerges_from': 1
-            }),
-            
-            'properties': Counter({
-                'recursive': 1, 'hierarchical': 1, 'parallel': 1, 'sequential': 1,
-                'distributed': 1, 'centralized': 1, 'adaptive': 1, 'stable': 1,
-                'dynamic': 1, 'static': 1, 'explicit': 1, 'implicit': 1,
-                'conscious': 1, 'unconscious': 1, 'automatic': 1
-            }),
-            
-            'modifiers': Counter({
-                'necessarily': 1, 'possibly': 1, 'probably': 1, 'definitely': 1,
-                'always': 1, 'never': 1, 'sometimes': 1, 'often': 1,
-                'partially': 1, 'fully': 1, 'gradually': 1, 'immediately': 1,
-                'directly': 1, 'indirectly': 1, 'systematically': 1
-            })
-        }
-        
-        # Logical templates for different types of statements
-        self.templates = {
-            'simple': [
-                ('CONCEPT', 'PREDICATE', 'CONCEPT'),
-                ('PROPERTY', 'CONCEPT', 'PREDICATE', 'CONCEPT'),
-                ('MODIFIER', 'CONCEPT', 'PREDICATE', 'CONCEPT')
+        self.cognitive_axioms = {
+            'perception': [
+                "All perception requires neural processing",
+                "Sensory input is processed in parallel channels",
+                "Attention modulates perceptual processing",
+                "Pattern recognition involves top-down and bottom-up processing",
+                "Perceptual constancies emerge from invariant detection"
             ],
-            'compound': [
-                ('(', 'CONCEPT', 'PREDICATE', 'CONCEPT', ')', 'BINARY_OP', 
-                 '(', 'CONCEPT', 'PREDICATE', 'CONCEPT', ')'),
-                ('UNARY_OP', '(', 'CONCEPT', 'PREDICATE', 'CONCEPT', ')'),
-                ('QUANTIFIER', 'CONCEPT', '(', 'PREDICATE', 'CONCEPT', ')')
+            'memory': [
+                "Working memory has limited capacity",
+                "Long-term potentiation enables memory formation",
+                "Memory consolidation occurs during sleep",
+                "Retrieval strengthens memory traces",
+                "Encoding requires attention allocation"
+            ],
+            'reasoning': [
+                "Logical inference follows transitivity",
+                "Causal reasoning requires temporal precedence",
+                "Abstract reasoning builds on concrete examples",
+                "Deductive validity preserves truth",
+                "Probabilistic inference guides decision-making"
+            ],
+            'learning': [
+                "Hebbian learning strengthens neural connections",
+                "Reinforcement learning optimizes behavior",
+                "Error prediction drives learning",
+                "Learning requires memory consolidation",
+                "Plasticity enables adaptive learning"
+            ],
+            'consciousness': [
+                "Consciousness requires information integration",
+                "Self-awareness emerges from recursive processing",
+                "Conscious access is capacity-limited",
+                "Awareness has gradual levels",
+                "Metacognition enables behavioral control"
             ]
         }
         
-        # Axiom schemas
-        self.axiom_schemas = [
-            "If {concept1} {predicate} {concept2}, then {concept2} {inverse_predicate} {concept1}",
-            "For all {concept}, there exists a {property} such that {concept} {predicate} it",
-            "Either {concept1} {predicate} {concept2} or {concept2} {predicate} {concept1}",
-            "If {concept1} is {property}, then it {predicate} {concept2}"
-        ]
-
-    def weighted_choice(self, counter: Counter) -> str:
-        """Select an item based on its frequency weight."""
-        if not counter:
-            return ""
-        items = list(counter.keys())
-        weights = list(counter.values())
-        total = sum(weights)
-        probabilities = [w/total for w in weights]
-        return random.choices(items, weights=probabilities, k=1)[0]
-
-    def generate_atomic_proposition(self) -> str:
-        """Generate an atomic logical proposition."""
-        concept1 = self.weighted_choice(self.vocabulary['concepts'])
-        predicate = self.weighted_choice(self.vocabulary['predicates'])
-        concept2 = self.weighted_choice(self.vocabulary['concepts'])
-        property = self.weighted_choice(self.vocabulary['properties'])
+        # Confidence scoring weights
+        self.weights = {
+            'empirical_support': 0.4,
+            'logical_necessity': 0.35,
+            'evidence_strength': 0.25
+        }
         
-        if random.random() < 0.3:
-            return f"{property} {concept1} {predicate} {concept2}"
-        return f"{concept1} {predicate} {concept2}"
+        # Evidence strength for different types of support
+        self.evidence_types = {
+            'experimental': 0.95,
+            'neuroimaging': 0.85,
+            'behavioral': 0.80,
+            'computational': 0.75,
+            'theoretical': 0.70
+        }
 
-    def generate_compound_statement(self) -> str:
-        """Generate a compound logical statement."""
-        op = random.choice(self.operators['binary'])
-        prop1 = self.generate_atomic_proposition()
-        prop2 = self.generate_atomic_proposition()
-        
-        if random.random() < 0.3:
-            modifier = self.weighted_choice(self.vocabulary['modifiers'])
-            return f"{modifier} ({prop1} {op} {prop2})"
-        return f"({prop1} {op} {prop2})"
-
-    def generate_quantified_statement(self) -> str:
-        """Generate a quantified logical statement."""
-        quantifier = random.choice(self.operators['quantifiers'])
-        concept = self.weighted_choice(self.vocabulary['concepts'])
-        property = self.weighted_choice(self.vocabulary['properties'])
-        predicate = self.weighted_choice(self.vocabulary['predicates'])
-        
-        return f"{quantifier} {concept} ({property} {predicate})"
-
-    def generate_axiom(self) -> str:
-        """Generate an axiom using the schemas."""
-        schema = random.choice(self.axiom_schemas)
-        
-        # Fill in the placeholders
-        filled_schema = schema.format(
-            concept1=self.weighted_choice(self.vocabulary['concepts']),
-            concept2=self.weighted_choice(self.vocabulary['concepts']),
-            predicate=self.weighted_choice(self.vocabulary['predicates']),
-            property=self.weighted_choice(self.vocabulary['properties']),
-            inverse_predicate=self.weighted_choice(self.vocabulary['predicates'])
+    def generate_confidence_score(self, 
+                                empirical_support: float,
+                                logical_necessity: float,
+                                evidence_strength: float) -> float:
+        """Calculate overall confidence score using weighted components."""
+        weighted_score = (
+            self.weights['empirical_support'] * empirical_support +
+            self.weights['logical_necessity'] * logical_necessity +
+            self.weights['evidence_strength'] * evidence_strength
         )
-        
-        return filled_schema
+        return round(weighted_score, 3)
 
-    def generate_logical_theory(self, num_statements: int = 3) -> List[str]:
-        """Generate a coherent set of logical statements forming a theory."""
-        theory = []
+    def evaluate_statement(self, statement: str, domain: str) -> LogicalStatement:
+        """Evaluate a logical statement and assign confidence metrics."""
+        # Generate component scores
+        empirical = np.random.beta(8, 2)  # Skewed toward high empirical support
+        logical = np.random.beta(7, 2)    # Strong logical necessity
+        evidence = random.choice(list(self.evidence_types.values()))
         
-        # Start with an axiom
-        theory.append(f"Axiom 1: {self.generate_axiom()}")
+        # Calculate overall confidence
+        confidence = self.generate_confidence_score(empirical, logical, evidence)
         
-        # Add derived statements
-        for i in range(1, num_statements):
-            if random.random() < 0.4:
-                stmt = self.generate_compound_statement()
-            elif random.random() < 0.7:
-                stmt = self.generate_quantified_statement()
-            else:
-                stmt = self.generate_atomic_proposition()
-                
-            theory.append(f"Statement {i+1}: {stmt}")
-            
-        return theory
+        return LogicalStatement(
+            statement=statement,
+            confidence=confidence,
+            domain=domain,
+            empirical_support=empirical,
+            logical_necessity=logical,
+            evidence_strength=evidence
+        )
 
-    def learn_from_statement(self, statement: str) -> None:
-        """Learn from an input logical statement."""
-        words = statement.lower().split()
+    def generate_high_confidence_statements(self, threshold: float = 0.8) -> List[LogicalStatement]:
+        """Generate list of high-confidence logical statements."""
+        high_confidence_statements = []
         
-        # Update vocabulary frequencies based on word patterns
-        for i, word in enumerate(words):
-            if word in self.operators['binary'] or word in self.operators['unary']:
-                continue
-                
-            if i > 0 and words[i-1] in ['is', 'are', 'becomes']:
-                self.vocabulary['properties'][word] += 1
-            elif i > 0 and words[i-1] in ['that', 'which', 'who']:
-                self.vocabulary['predicates'][word] += 1
-            else:
-                self.vocabulary['concepts'][word] += 1
+        # Evaluate statements from each domain
+        for domain, statements in self.cognitive_axioms.items():
+            for statement in statements:
+                evaluated_statement = self.evaluate_statement(statement, domain)
+                if evaluated_statement.confidence >= threshold:
+                    high_confidence_statements.append(evaluated_statement)
+        
+        # Sort by confidence score
+        high_confidence_statements.sort(key=lambda x: x.confidence, reverse=True)
+        return high_confidence_statements
 
 def main():
-    generator = LogicalStatementGenerator()
+    generator = HighConfidenceLogicGenerator()
+    high_confidence_statements = generator.generate_high_confidence_statements(threshold=0.8)
     
-    print("Logical Statement Generator")
-    print("Generating a cognitive theory...\n")
+    print("High Confidence Cognitive Statements\n")
+    print("=" * 80)
     
-    theory = generator.generate_logical_theory(5)
-    for statement in theory:
-        print(statement)
-        print()
+    for i, stmt in enumerate(high_confidence_statements, 1):
+        print(f"\nStatement {i}:")
+        print(f"Domain: {stmt.domain.upper()}")
+        print(f"Statement: {stmt.statement}")
+        print(f"Confidence Score: {stmt.confidence:.3f}")
+        print(f"Components:")
+        print(f"  - Empirical Support: {stmt.empirical_support:.3f}")
+        print(f"  - Logical Necessity: {stmt.logical_necessity:.3f}")
+        print(f"  - Evidence Strength: {stmt.evidence_strength:.3f}")
+        print("-" * 80)
     
-    while True:
-        choice = input("\nGenerate another theory? (y/n): ").lower()
-        if choice != 'y':
-            break
-            
-        num_statements = int(input("How many statements? (1-10): "))
-        num_statements = max(1, min(10, num_statements))
-        
-        print("\nGenerating new theory...\n")
-        theory = generator.generate_logical_theory(num_statements)
-        for statement in theory:
-            print(statement)
-            print()
+    # Summary statistics
+    avg_confidence = np.mean([s.confidence for s in high_confidence_statements])
+    domains_covered = len(set(s.domain for s in high_confidence_statements))
+    
+    print(f"\nSummary:")
+    print(f"Total high-confidence statements: {len(high_confidence_statements)}")
+    print(f"Average confidence score: {avg_confidence:.3f}")
+    print(f"Domains covered: {domains_covered}")
 
 if __name__ == "__main__":
     main()
