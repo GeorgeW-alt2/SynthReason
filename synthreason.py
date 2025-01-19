@@ -549,40 +549,19 @@ def main():
                 
             # Main interaction loop
             print("\nEntering text generation mode. Type your prompts:")
-            
-            # Open log file in append mode
-            from datetime import datetime
-            with open("interaction_log.txt", "a", encoding="utf-8") as log:
-                # Write session start timestamp
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                log.write(f"\n\n=== New Session: {timestamp} ===\n")
-                
-                while True:
-                    try:
-                        user_input = input("User: ")
-                        if user_input.lower() in ['quit', 'exit']:
-                            log.write("\n=== Session Ended ===\n")
-                            break
-                            
-                        continued_text = generator.continue_text(user_input, num_words=150, temperature=0.5)
-                        print("AI:", continued_text)
-                        
-                        # Log the interaction
-                        log.write(f"\nUser: {user_input}\n")
-                        log.write(f"AI: {continued_text}\n")
-                        log.write("-" * 50 + "\n")
-                        log.flush()  # Ensure immediate write to file
-                        
-                    except KeyboardInterrupt:
-                        log.write("\n=== Session Interrupted ===\n")
-                        print("\nExiting...")
+            while True:
+                try:
+                    user_input = input("User: ")
+                    if user_input.lower() in ['quit', 'exit']:
                         break
-                    except Exception as e:
-                        error_msg = f"Error occurred: {e}"
-                        print(error_msg)
-                        log.write(f"\n{error_msg}\n")
-                        log.flush()
-                        continue
+                    continued_text = generator.continue_text(generator.continue_text(user_input, num_words=150, temperature=0.5), num_words=150, temperature=0.5)
+                    print("AI:", continued_text)
+                except KeyboardInterrupt:
+                    print("\nExiting...")
+                    break
+                except Exception as e:
+                    print(f"Error occurred: {e}")
+                    continue
         else:
             print("Invalid choice. Exiting...")
             return
