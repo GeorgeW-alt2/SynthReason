@@ -5,7 +5,7 @@ from typing import List, Dict, Tuple, Any
 from collections import Counter, defaultdict
 import numpy as np
 
-KB_MEMORY = 100000
+KB_MEMORY = -1
 
 def clean_text(text: str) -> str:
     """
