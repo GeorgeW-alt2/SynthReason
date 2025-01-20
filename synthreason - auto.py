@@ -6,7 +6,65 @@ from collections import Counter, defaultdict
 import numpy as np
 
 KB_MEMORY = -1
-
+def clean_text(text: str) -> str:
+    """
+    Clean text using regular expressions
+    
+    Args:
+        text (str): Input text to clean
+        
+    Returns:
+        str: Cleaned text
+    """
+    import re
+    
+    # Remove URLs
+    text = re.sub(r'https?://\S+|www\.\S+', '', text)
+    
+    # Remove email addresses
+    text = re.sub(r'\S+@\S+', '', text)
+    
+    # Remove phone numbers
+    text = re.sub(r'\+?\d{1,3}[-.\s]?\(?\d{1,3}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,4}', '', text)
+    
+    # Remove special characters but keep punctuation
+    text = re.sub(r'[^A-Za-z0-9\s.,!?\'"-]', '', text)
+    
+    # Remove extra whitespace
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Remove extra dots
+    text = re.sub(r'\.{2,}', '.', text)
+    
+    # Fix spacing around punctuation
+    text = re.sub(r'\s([.,!?])', r'\1', text)  # Remove space before punctuation
+    text = re.sub(r'([.,!?])([A-Za-z])', r'\1 \2', text)  # Add space after punctuation
+    
+    # Fix contractions spacing
+    text = re.sub(r'\s\'', '\'', text)  # Remove space before apostrophe
+    
+    # Fix quote spacing
+    text = re.sub(r'\s"', '"', text)  # Remove space before quote
+    text = re.sub(r'"\s', '"', text)  # Remove space after quote
+    
+    # Fix dash spacing
+    text = re.sub(r'\s-\s', '-', text)  # Remove spaces around dashes
+    
+    # Normalize multiple consecutive spaces
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Strip leading/trailing whitespace
+    text = text.strip()
+    
+    # Ensure first character is uppercase
+    if text and text[0].isalpha():
+        text = text[0].upper() + text[1:]
+    
+    # Ensure there's a period at the end if not already ended with punctuation
+    if text and not text[-1] in '.!?':
+        text += '.'
+        
+    return text
 class SemanticGenerator:
     def __init__(self):
         self.templates = []
@@ -268,7 +326,7 @@ def train_probs():
     # Try to load base text if available
     try:
         with open(input("Enter filename: "), 'r', encoding='iso-8859-1') as f:
-            text = ' '.join(f.read().split())[:KB_MEMORY]
+            text = ' '.join(clean_text(f.read()).strip().split())[:KB_MEMORY]
             generator.learn_from_text(text)
             print("\nLoaded base patterns from file.")
     except FileNotFoundError:
@@ -301,7 +359,7 @@ class NaturalTextGenerator:
         
         # Add forward continuation context
         self.forward_context = defaultdict(lambda: defaultdict(float))
-        self.context_window = 3  # Number of words to consider for context
+        self.context_window = 4  # Number of words to consider for context
         
         # Preprocess categories and build language models
         self.categories = {}
@@ -354,21 +412,22 @@ class NaturalTextGenerator:
             
             # Also update bigram counts
             prev_word = all_words[i]
-            curr_word = all_words[i + 1]
+            curr_word = all_words[i + 1] 
             bigram_counts[prev_word][curr_word] += 1
         
-        # Normalize forward context probabilities
-        for context, next_words in self.forward_context.items():
+        # Calculate transition probabilities from bigram counts
+        self.transition_probabilities = {}
+        for prev_word, next_words in bigram_counts.items():
             total = sum(next_words.values())
-            self.forward_context[context] = {
+            self.transition_probabilities[prev_word] = {
                 word: count / total 
                 for word, count in next_words.items()
             }
         
-        # Calculate transition probabilities
-        for prev_word, next_words in bigram_counts.items():
+        # Normalize forward context probabilities
+        for context, next_words in self.transition_probabilities.items():
             total = sum(next_words.values())
-            self.transition_probabilities[prev_word] = {
+            self.forward_context[context] = {
                 word: count / total 
                 for word, count in next_words.items()
             }
@@ -414,21 +473,29 @@ class NaturalTextGenerator:
         generated_words = []
         
         for _ in range(num_words):
-            # Get recent context
-            context_start = max(0, len(words) - self.context_window)
+            # Get recent context with random window size
+            context_window = random.randint(1, self.context_window)  # Randomize context window
+            context_start = max(0, len(words) - context_window)
             recent_context = tuple(words[context_start:])
             
             # If we have forward context for this sequence
             if recent_context in self.forward_context:
                 next_word_probs = self.forward_context[recent_context]
                 
-                # Apply sigmoid transformation first
+                # Apply sigmoid transformation with random scaling
+                noise_factor = random.uniform(0.1, 0.2)  # Random noise multiplier
                 sigmoid_probs = {
-                    word: sigmoid(prob * temperature)
+                    word: sigmoid(prob * temperature * noise_factor)
                     for word, prob in next_word_probs.items()
                 }
                 
-                # Then apply temperature scaling
+                # Randomly boost lower probability words
+                boost_threshold = random.uniform(0.1, 0.2)
+                for word, prob in sigmoid_probs.items():
+                    if prob < boost_threshold:
+                        sigmoid_probs[word] *= random.uniform(20.1, 100.2)
+                
+                # Apply temperature scaling
                 adjusted_probs = {
                     word: np.power(prob, 1/temperature)
                     for word, prob in sigmoid_probs.items()
@@ -441,11 +508,18 @@ class NaturalTextGenerator:
                     for word, prob in adjusted_probs.items()
                 }
                 
-                # Choose next word
-                next_word = random.choices(
-                    list(adjusted_probs.keys()),
-                    weights=list(adjusted_probs.values())
-                )[0]
+                # Sometimes pick from less likely candidates
+                if random.random() < 0.15:  # 15% chance to pick less common words
+                    sorted_words = sorted(adjusted_probs.items(), key=lambda x: x[1])
+                    bottom_half = sorted_words[:len(sorted_words)//2]
+                    if bottom_half:
+                        next_word = random.choice(bottom_half)[0]
+                else:
+                    # Choose next word
+                    next_word = random.choices(
+                        list(adjusted_probs.keys()),
+                        weights=list(adjusted_probs.values())
+                    )[0]
             
             # Fallback to regular generation if no forward context
             else:
