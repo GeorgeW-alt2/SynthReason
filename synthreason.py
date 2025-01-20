@@ -108,14 +108,32 @@ class SemanticGenerator:
         
     def learn_from_text(self, text: str) -> None:
         """Learn patterns and words from input text."""
+        from tqdm import tqdm
+        
+        print("\nLearning from text...")
+        
+        # Split into sentences with progress
+        print("\nSplitting text into sentences...")
         sentences = self._split_into_sentences(text)
-        for sentence in sentences:
+        
+        print("\nExtracting patterns and categorizing words...")
+        for sentence in tqdm(sentences, desc="Processing sentences"):
+            # Extract template with progress bar
             template = self._extract_template(sentence)
             if template:
                 self.templates.append(template)
+            
+            # Categorize words
             words = sentence.lower().split()
             self._categorize_words(words)
-    
+        
+        print(f"\nLearned from {len(sentences)} sentences")
+        print(f"Extracted {len(self.templates)} templates")
+        # Print stats for each word category
+        print("\nVocabulary statistics:")
+        for category, counter in self.words.items():
+            print(f"{category.capitalize()}: {len(counter)} words")
+
     def _split_into_sentences(self, text: str) -> List[str]:
         """Split text into sentences."""
         text = ' '.join(text.split())
@@ -234,25 +252,36 @@ class SemanticGenerator:
     
     def dump_probabilities(self, filename: str = 'semantic_generator_probabilities.pkl'):
         """Dump word probabilities and templates to a pickle file."""
+        from tqdm import tqdm
+        
+        print("\nPreparing probability dumps...")
         probabilities_dict = {}
         
-        for category, counter in self.words.items():
+        print("\nProcessing word categories...")
+        for category, counter in tqdm(self.words.items(), desc="Processing categories"):
             total = sum(counter.values())
             category_list = []
-            for word, count in counter.items():
+            
+            # Process words within each category
+            for word, count in tqdm(counter.items(), desc=f"Processing {category}", leave=False):
                 probability = count / total
                 index = list(counter.keys()).index(word)
                 category_list.append((word, probability, index))
             
+            # Sort category items
             category_list.sort(key=lambda x: x[2])
             probabilities_dict[category] = category_list
         
-        probabilities_dict['templates'] = self.templates
+        print("\nProcessing templates...")
+        probabilities_dict['templates'] = []
+        for template in tqdm(self.templates, desc="Processing templates"):
+            probabilities_dict['templates'].append(template)
         
+        print("\nSaving probability dump...")
         with open(filename, 'wb') as f:
             pickle.dump(probabilities_dict, f)
         
-        print(f"Probabilities dumped to {filename}")
+        print(f"\nProbabilities successfully dumped to {filename}")
         
     def _build_language_models(self):
         """Build language models and save to dump file."""
@@ -567,15 +596,23 @@ class NaturalTextGenerator:
 
 def train_probs():
     """Train new model and create dumps."""
+    from tqdm import tqdm
     generator = SemanticGenerator()
     
     print("Welcome to the Probabilistic Semantic Text Generator!")
     
     try:
-        with open(input("Enter filename: "), 'r', encoding='iso-8859-1') as f:
-            text = ' '.join(clean_text(f.read()).strip().split())[:KB_MEMORY]
-            generator.learn_from_text(text)
-            print("\nLoaded and processed base patterns from file.")
+        filename = input("Enter filename: ")
+        print("\nReading file...")
+        with open(filename, 'r', encoding='iso-8859-1') as f:
+            raw_text = f.read()
+            
+        print("\nCleaning text...")
+        text = ' '.join(clean_text(raw_text).strip().split())[:KB_MEMORY]
+        
+        print("\nLearning patterns...")
+        generator.learn_from_text(text)
+        
     except FileNotFoundError:
         print("\nNo base file found. Starting with empty patterns.")
     
