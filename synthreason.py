@@ -599,8 +599,6 @@ def train_probs():
     from tqdm import tqdm
     generator = SemanticGenerator()
     
-    print("Welcome to the Probabilistic Semantic Text Generator!")
-    
     try:
         filename = input("Enter filename: ")
         print("\nReading file...")
@@ -622,6 +620,8 @@ def train_probs():
     return
 
 def main():
+    print("Welcome to the Probabilistic Semantic Text Generator!")
+
     while True:
         choice = input("\nChoose an option:\n1. Train new model\n2. Continue with existing model\nChoice (1/2): ").strip()
         
