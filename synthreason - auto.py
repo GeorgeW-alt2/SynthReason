@@ -509,7 +509,7 @@ class NaturalTextGenerator:
                 }
                 
                 # Sometimes pick from less likely candidates
-                if random.random() < 0.15:  # 15% chance to pick less common words
+                if random.random() < 0.0.05:  # 5% chance to pick less common words
                     sorted_words = sorted(adjusted_probs.items(), key=lambda x: x[1])
                     bottom_half = sorted_words[:len(sorted_words)//2]
                     if bottom_half:
