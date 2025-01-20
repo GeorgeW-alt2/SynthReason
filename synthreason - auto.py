@@ -5,18 +5,10 @@ from typing import List, Dict, Tuple, Any
 from collections import Counter, defaultdict
 import numpy as np
 
-KB_MEMORY = 10000 #change to -1 for unlimited
+KB_MEMORY = 100000
 
 def clean_text(text: str) -> str:
-    """
-    Clean text using regular expressions
-    
-    Args:
-        text (str): Input text to clean
-        
-    Returns:
-        str: Cleaned text
-    """
+    """Clean text using regular expressions."""
     # Remove URLs
     text = re.sub(r'https?://\S+|www\.\S+', '', text)
     
@@ -39,18 +31,18 @@ def clean_text(text: str) -> str:
     text = re.sub(r'\.{2,}', '.', text)
     
     # Fix spacing around punctuation
-    text = re.sub(r'\s([.,!?])', r'\1', text)  # Remove space before punctuation
-    text = re.sub(r'([.,!?])([A-Za-z])', r'\1 \2', text)  # Add space after punctuation
+    text = re.sub(r'\s([.,!?])', r'\1', text)  
+    text = re.sub(r'([.,!?])([A-Za-z])', r'\1 \2', text)
     
     # Fix contractions spacing
-    text = re.sub(r'\s\'', '\'', text)  # Remove space before apostrophe
+    text = re.sub(r'\s\'', '\'', text)
     
     # Fix quote spacing
-    text = re.sub(r'\s"', '"', text)  # Remove space before quote
-    text = re.sub(r'"\s', '"', text)  # Remove space after quote
+    text = re.sub(r'\s"', '"', text)
+    text = re.sub(r'"\s', '"', text)
     
     # Fix dash spacing
-    text = re.sub(r'\s-\s', '-', text)  # Remove spaces around dashes
+    text = re.sub(r'\s-\s', '-', text)
     
     # Normalize multiple consecutive spaces
     text = re.sub(r'\s+', ' ', text)
@@ -113,10 +105,6 @@ class SemanticGenerator:
         total = sum(weights)
         probabilities = [w/total for w in weights]
         return random.choices(words, weights=probabilities, k=1)[0]
-        
-    def add_input_text(self, text: str) -> None:
-        """Add new input text and learn from it."""
-        self.learn_from_text(text)
         
     def learn_from_text(self, text: str) -> None:
         """Learn patterns and words from input text."""
@@ -191,9 +179,8 @@ class SemanticGenerator:
             word_category = None
             for category, counter in self.words.items():
                 if clean_word in counter:
-                    if counter[clean_word] > max_freq:
-                        max_freq = counter[clean_word]
-                        word_category = category
+                    max_freq = counter[clean_word]
+                    word_category = category
             
             if max_freq > 0:
                 if word_category:
@@ -246,7 +233,7 @@ class SemanticGenerator:
         return ' '.join(self.generate_sentence() for _ in range(num_sentences))
     
     def dump_probabilities(self, filename: str = 'semantic_generator_probabilities.pkl'):
-        """Dump word probabilities and indices to a pickle file."""
+        """Dump word probabilities and templates to a pickle file."""
         probabilities_dict = {}
         
         for category, counter in self.words.items():
@@ -266,22 +253,116 @@ class SemanticGenerator:
             pickle.dump(probabilities_dict, f)
         
         print(f"Probabilities dumped to {filename}")
+        
+    def _build_language_models(self):
+        """Build language models and save to dump file."""
+        all_words = []
+        for template in self.templates:
+            template_words = [word.lower() for _, word in template]
+            all_words.extend(template_words)
+        
+        unigram_counts = defaultdict(int)
+        for word in all_words:
+            unigram_counts[word] += 1
+        total_words = sum(unigram_counts.values())
+        
+        unigram_probs = {
+            word: count / total_words 
+            for word, count in unigram_counts.items()
+        }
+        
+        bigram_counts = defaultdict(lambda: defaultdict(int))
+        context_counts = defaultdict(lambda: defaultdict(int))
+        
+        context_window = 10
+        for i in range(len(all_words) - context_window):
+            context = tuple(all_words[i:i + context_window])
+            next_word = all_words[i + context_window]
+            context_counts[context][next_word] += 1
+            
+            prev_word = all_words[i]
+            curr_word = all_words[i + 1]
+            bigram_counts[prev_word][curr_word] += 1
+        
+        # Calculate context probabilities and divergence
+        context_data = {}
+        for context, next_words in context_counts.items():
+            total = sum(next_words.values())
+            context_probs = {
+                word: count / total 
+                for word, count in next_words.items()
+            }
+            
+            # Calculate KL divergence
+            epsilon = 1e-10
+            p = np.array(list(context_probs.values()))
+            q = np.array([unigram_probs.get(w, epsilon) for w in context_probs.keys()])
+            p = p / np.sum(p)
+            q = q / np.sum(q)
+            divergence = np.sum(np.where(p > epsilon, p * np.log(p / q), 0))
+            
+            context_data[context] = {
+                'probabilities': context_probs,
+                'divergence': divergence
+            }
+        
+        # Calculate transition probabilities
+        transition_probs = {}
+        for prev_word, next_words in bigram_counts.items():
+            total = sum(next_words.values())
+            transition_probs[prev_word] = {
+                word: count / total 
+                for word, count in next_words.items()
+            }
+        
+        # Create model dump
+        model_dump = {
+            'unigram_probs': unigram_probs,
+            'bigram_counts': dict(bigram_counts),
+            'context_data': context_data,
+            'transition_probs': transition_probs
+        }
+        
+        # Save to file
+        with open('language_model_dump.pkl', 'wb') as f:
+            pickle.dump(model_dump, f)
+            
+        print("Language models dumped to language_model_dump.pkl")
 
 class NaturalTextGenerator:
-    def __init__(self, filename='semantic_generator_probabilities.pkl'):
-        """Initialize an advanced text generator with divergence."""
-        with open(filename, 'rb') as f:
+    def __init__(self, prob_file='semantic_generator_probabilities.pkl', model_file='language_model_dump.pkl'):
+        """Initialize generator from probability and model dumps."""
+        # Load probabilities
+        with open(prob_file, 'rb') as f:
             self.probabilities = pickle.load(f)
         
-        self.ngram_models = {}
-        self.context_models = defaultdict(lambda: defaultdict(int))
-        self.transition_probabilities = defaultdict(lambda: defaultdict(float))
+        # Load language model
+        with open(model_file, 'rb') as f:
+            model_data = pickle.load(f)
         
-        self.forward_context = defaultdict(lambda: defaultdict(float))
-        self.context_divergence = defaultdict(float)
+        # Initialize components
+# Set up models
+        self.ngram_models = {
+            'unigram': model_data['unigram_probs'],
+            'bigram': model_data['bigram_counts']
+        }
+        
+        # Context parameters
         self.context_window = 4
         self.divergence_threshold = 0.3
         
+        # Initialize from dump
+        self.forward_context = defaultdict(lambda: defaultdict(float))
+        self.context_divergence = defaultdict(float)
+        self.transition_probabilities = defaultdict(lambda: defaultdict(float))
+        
+        for context, data in model_data['context_data'].items():
+            self.forward_context[context] = data['probabilities']
+            self.context_divergence[context] = data['divergence']
+        
+        self.transition_probabilities = model_data['transition_probs']
+        
+        # Initialize categories
         self.categories = {}
         for category, category_list in self.probabilities.items():
             if category == 'templates':
@@ -292,19 +373,25 @@ class NaturalTextGenerator:
                 'words': words,
                 'probabilities': probs
             }
+
+    def calculate_kl_divergence(self, p_dist, q_dist):
+        """Calculate KL divergence between two probability distributions."""
+        # Create unified vocabulary
+        all_words = set(p_dist.keys()) | set(q_dist.keys())
         
-        self._build_language_models()
+        # Initialize with small epsilon
+        epsilon = 1e-10
+        p = np.array([p_dist.get(word, epsilon) for word in all_words])
+        q = np.array([q_dist.get(word, epsilon) for word in all_words])
+        
+        # Normalize
+        p = p / np.sum(p)
+        q = q / np.sum(q)
+        
+        return np.sum(np.where(p > epsilon, p * np.log(p / q), 0))
 
     def weighted_choice(self, category):
-        """
-        Choose a word from a category based on its learned probability
-        
-        Args:
-            category (str): Word category to choose from
-            
-        Returns:
-            str: Selected word based on probability distribution
-        """
+        """Choose word from category based on probabilities."""
         if category not in self.categories:
             return None
             
@@ -325,92 +412,20 @@ class NaturalTextGenerator:
             print(f"Probabilities length: {len(cat_data['probabilities'])}")
             return None
 
-    def calculate_kl_divergence(self, p_dist, q_dist):
-        """Calculate KL divergence between two probability distributions."""
-        # Create a unified vocabulary space
-        all_words = set(p_dist.keys()) | set(q_dist.keys())
-        
-        # Initialize arrays with small epsilon to avoid division by zero
-        epsilon = 1e-10
-        p = np.array([p_dist.get(word, epsilon) for word in all_words])
-        q = np.array([q_dist.get(word, epsilon) for word in all_words])
-        
-        # Normalize the distributions
-        p = p / np.sum(p)
-        q = q / np.sum(q)
-        
-        # Calculate KL divergence
-        return np.sum(np.where(p > epsilon, p * np.log(p / q), 0))
-
-    def _build_language_models(self):
-        """Build language models with divergence tracking."""
-        all_words = []
-        for template in self.probabilities.get('templates', []):
-            template_words = [word.lower() for _, word in template]
-            all_words.extend(template_words)
-        
-        unigram_counts = defaultdict(int)
-        for word in all_words:
-            unigram_counts[word] += 1
-        total_words = sum(unigram_counts.values())
-        
-        unigram_probs = {
-            word: count / total_words 
-            for word, count in unigram_counts.items()
-        }
-        
-        bigram_counts = defaultdict(lambda: defaultdict(int))
-        context_counts = defaultdict(lambda: defaultdict(int))
-        
-        for i in range(len(all_words) - self.context_window):
-            context = tuple(all_words[i:i + self.context_window])
-            next_word = all_words[i + self.context_window]
-            context_counts[context][next_word] += 1
-            
-            prev_word = all_words[i]
-            curr_word = all_words[i + 1]
-            bigram_counts[prev_word][curr_word] += 1
-        
-        for context, next_words in context_counts.items():
-            total = sum(next_words.values())
-            context_probs = {
-                word: count / total 
-                for word, count in next_words.items()
-            }
-            
-            self.context_divergence[context] = self.calculate_kl_divergence(
-                context_probs,
-                unigram_probs
-            )
-            
-            self.forward_context[context] = context_probs
-        
-        self.transition_probabilities = {}
-        for prev_word, next_words in bigram_counts.items():
-            total = sum(next_words.values())
-            self.transition_probabilities[prev_word] = {
-                word: count / total 
-                for word, count in next_words.items()
-            }
-        
-        self.ngram_models = {
-            'unigram': unigram_probs,
-            'bigram': dict(bigram_counts)
-        }
-        
     def generate_word_from_context(self, prev_word, temperature):
-        """Generate a word based on previous context with temperature."""
+        """Generate word based on context with temperature."""
         if prev_word in self.transition_probabilities:
             probs = self.transition_probabilities[prev_word]
             
-            # Apply temperature
+            # Apply temperature scaling
             adjusted_probs = {
                 word: np.power(prob, 1/temperature)
                 for word, prob in probs.items()
             }
+            
             # Normalize
             total = sum(adjusted_probs.values())
-            if total > 0:  # Add check for zero total
+            if total > 0:
                 adjusted_probs = {
                     word: prob/total 
                     for word, prob in adjusted_probs.items()
@@ -421,29 +436,18 @@ class NaturalTextGenerator:
                     weights=list(adjusted_probs.values())
                 )[0]
         
-        # Fallback to random category word
+        # Fallback to random category
         categories = list(self.categories.keys())
-        if categories:  # Add check for empty categories
+        if categories:
             category = random.choice(categories)
             return self.weighted_choice(category)
-        return None  # Ultimate fallback
+        return None
 
     def continue_text(self, input_text, num_words=10, temperature=0.7):
-        """
-        Continue text using forward context with divergence-based adjustment
-        
-        Args:
-            input_text (str): Text to continue from
-            num_words (int): Number of words to generate
-            temperature (float): Temperature parameter for generation
-            
-        Returns:
-            str: Generated text continuation
-        """
+        """Continue text using context and divergence."""
         def sigmoid(x):
             return 1 / (1 + np.exp(-x))
         
-        # Handle empty input
         if not input_text:
             print("Warning: Empty input text")
             return ""
@@ -453,7 +457,7 @@ class NaturalTextGenerator:
         
         for _ in range(num_words):
             try:
-                # Dynamic context window
+                # Get dynamic context window
                 context_window = min(random.randint(1, self.context_window), len(words))
                 context_start = max(0, len(words) - context_window)
                 recent_context = tuple(words[context_start:])
@@ -464,34 +468,34 @@ class NaturalTextGenerator:
                     # Get divergence score
                     divergence = self.context_divergence.get(recent_context, 0)
                     
-                    # Adjust temperature based on divergence
+                    # Adjust temperature
                     local_temp = temperature
                     if divergence > self.divergence_threshold:
                         local_temp *= (1 + divergence)
                     else:
                         local_temp *= max(0.5, 1 - divergence)
                     
-                    # Apply sigmoid with divergence-based adjustment
+                    # Apply sigmoid with noise
                     noise_factor = random.uniform(0.1, 0.2) * (1 + divergence)
                     sigmoid_probs = {
                         word: sigmoid(prob * local_temp * noise_factor)
                         for word, prob in next_word_probs.items()
                     }
                     
-                    # Dynamic probability boosting
+                    # Boost low probabilities
                     boost_threshold = random.uniform(0.1, 0.2) * (1 + divergence)
                     for word, prob in sigmoid_probs.items():
                         if prob < boost_threshold and random.random() < divergence:
-                            boost_factor = random.uniform(20.1, 100.2) * (1 + divergence)
+                            boost_factor = random.uniform(1.1, 2.0) * (1 + divergence)
                             sigmoid_probs[word] *= boost_factor
                     
-                    # Temperature scaling with divergence
+                    # Temperature scaling
                     adjusted_probs = {
                         word: np.power(prob, 1/(local_temp * (1 + divergence)))
                         for word, prob in sigmoid_probs.items()
                     }
                     
-                    # Normalize probabilities
+                    # Normalize
                     total = sum(adjusted_probs.values())
                     if total > 0:
                         adjusted_probs = {
@@ -499,16 +503,19 @@ class NaturalTextGenerator:
                             for word, prob in adjusted_probs.items()
                         }
                         
-                        # Word selection based on divergence
+                        # Select word based on divergence
                         if random.random() < divergence:
-                            sorted_words = sorted(adjusted_probs.items(), key=lambda x: x[1])
+                            sorted_words = sorted(
+                                adjusted_probs.items(), 
+                                key=lambda x: x[1]
+                            )
                             pool_size = max(1, int(len(sorted_words) * divergence))
                             selection_pool = sorted_words[:pool_size]
                             if selection_pool:
                                 next_word = random.choice(selection_pool)[0]
                             else:
                                 next_word = self.generate_word_from_context(
-                                    words[-1] if words else None, 
+                                    words[-1] if words else None,
                                     local_temp
                                 )
                         else:
@@ -518,16 +525,16 @@ class NaturalTextGenerator:
                             )[0]
                     else:
                         next_word = self.generate_word_from_context(
-                            words[-1] if words else None, 
+                            words[-1] if words else None,
                             local_temp
                         )
                 else:
                     next_word = self.generate_word_from_context(
-                        words[-1] if words else None, 
+                        words[-1] if words else None,
                         temperature
                     )
                 
-                if next_word:  # Only append if we got a valid word
+                if next_word:
                     words.append(next_word)
                     generated_words.append(next_word)
                     
@@ -535,98 +542,50 @@ class NaturalTextGenerator:
                 print(f"Warning: Error during word generation: {e}")
                 continue
         
-        # Format the continuation
+        # Format output
         continuation = ' '.join(generated_words)
         if not continuation:
             return input_text
             
-        # Handle capitalization and spacing
         if input_text[-1] in '.!?':
             continuation = continuation[0].upper() + continuation[1:]
         
         return input_text + ' ' + continuation
-    def analyze_language_models(self):
-        """
-        Analyze and print details of language models with divergence metrics
-        """
-        print("\nLanguage Model Analysis with Divergence Metrics:")
-        
-        # Unigram analysis
-        print("\nTop 10 Unigram Probabilities:")
-        sorted_unigrams = sorted(
-            self.ngram_models['unigram'].items(), 
-            key=lambda x: x[1], 
-            reverse=True
-        )[:10]
-        for word, prob in sorted_unigrams:
-            print(f"{word}: {prob:.4f}")
-        
-        # Context divergence analysis
-        print("\nHighest Divergence Contexts:")
-        sorted_contexts = sorted(
-            self.context_divergence.items(),
-            key=lambda x: x[1],
-            reverse=True
-        )[:5]
-        for context, divergence in sorted_contexts:
-            print(f"\nContext: {' '.join(context)}")
-            print(f"Divergence: {divergence:.4f}")
-            
-            # Show probable next words for this context
-            if context in self.forward_context:
-                print("Top next words:")
-                sorted_next = sorted(
-                    self.forward_context[context].items(),
-                    key=lambda x: x[1],
-                    reverse=True
-                )[:5]
-                for word, prob in sorted_next:
-                    print(f"  -> {word}: {prob:.4f}")
 
 def train_probs():
-    """Run interactive text input session."""
+    """Train new model and create dumps."""
     generator = SemanticGenerator()
     
     print("Welcome to the Probabilistic Semantic Text Generator!")
     
-    # Try to load base text if available
     try:
         with open(input("Enter filename: "), 'r', encoding='iso-8859-1') as f:
             text = ' '.join(clean_text(f.read()).strip().split())[:KB_MEMORY]
             generator.learn_from_text(text)
-            print("\nLoaded base patterns from file.")
+            print("\nLoaded and processed base patterns from file.")
     except FileNotFoundError:
         print("\nNo base file found. Starting with empty patterns.")
     
     print(generator.generate_text(10))
     
-    # Optional: Dump probabilities after each input
+    # Create both dumps
     generator.dump_probabilities()
+    generator._build_language_models()
     return
 
 def main():
     while True:
-        choice = input("Choose an option:\n1. Train new model\n2. Continue with existing model\nChoice (1/2): ").strip()
+        choice = input("\nChoose an option:\n1. Train new model\n2. Continue with existing model\nChoice (1/2): ").strip()
         
         if choice == "1":
             train_probs()
-            try:
-                generator = NaturalTextGenerator()
-            except FileNotFoundError:
-                print("Error: Model file not created successfully. Please try again.")
-                continue
-                
+        
         elif choice == "2":
             try:
                 generator = NaturalTextGenerator()
-            except FileNotFoundError:
-                print("Error: No existing model file found (semantic_generator_probabilities.pkl)")
-                print("Please train a new model first using option 1.")
-                continue
-                
-            # Main interaction loop
-            print("\nEntering text generation mode. Type your prompts:")
-            try:
+                # Main interaction loop
+                print("\nEntering text generation mode. Type your prompts:")
+
                 with open("questions.conf", "r", encoding="utf-8") as f:
                     questions = f.readlines()
                 
@@ -653,16 +612,15 @@ def main():
                         log.write(f"AI: {continued_text}\n")
                         log.write("-" * 50 + "\n")
                         log.flush()  # Ensure immediate write to file
-                        
-            except KeyboardInterrupt:
-                print("\nExiting...")
-                break
+                    
+            except FileNotFoundError:
+                print("\nError: Model dumps not found. Please train a model first (option 1).")
             except Exception as e:
-                print(f"Error occurred: {e}")
-                continue
+                print(f"\nError loading model: {e}")
+        
         else:
-            print("Invalid choice. Exiting...")
-            return
-
+            print("Invalid choice. Please select 1 or 2.")
+            continue
+        
 if __name__ == "__main__":
     main()
