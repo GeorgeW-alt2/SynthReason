@@ -61,8 +61,8 @@ python text_generator.py
 
 Example interaction:
 ```
-User: The sun was setting behind the mountains
-AI: The sun was setting behind the mountains in the optimal policies actually have no idea of the other rules.
+User: existence is
+AI: existence is the first kind of techniques for this chapter was developed and a function that can be the core of the world
 ```
 
 ## How It Works
