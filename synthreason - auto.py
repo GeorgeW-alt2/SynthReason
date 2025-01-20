@@ -566,8 +566,6 @@ def train_probs():
     except FileNotFoundError:
         print("\nNo base file found. Starting with empty patterns.")
     
-    print(generator.generate_text(10))
-    
     # Create both dumps
     generator.dump_probabilities()
     generator._build_language_models()

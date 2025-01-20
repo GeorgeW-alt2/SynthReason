@@ -5,7 +5,7 @@ from typing import List, Dict, Tuple, Any
 from collections import Counter, defaultdict
 import numpy as np
 
-KB_MEMORY = 100000
+KB_MEMORY = -1
 
 def clean_text(text: str) -> str:
     """Clean text using regular expressions."""
@@ -565,8 +565,6 @@ def train_probs():
             print("\nLoaded and processed base patterns from file.")
     except FileNotFoundError:
         print("\nNo base file found. Starting with empty patterns.")
-    
-    print(generator.generate_text(10))
     
     # Create both dumps
     generator.dump_probabilities()
