@@ -256,26 +256,36 @@ class SemanticGenerator:
         
     def _build_language_models(self):
         """Build language models and save to dump file."""
+        from tqdm import tqdm
+        
+        print("\nBuilding language models...")
+        
+        # Collect words from templates
         all_words = []
-        for template in self.templates:
+        for template in tqdm(self.templates, desc="Processing templates"):
             template_words = [word.lower() for _, word in template]
             all_words.extend(template_words)
         
+        # Build unigram counts
+        print("\nCalculating unigram probabilities...")
         unigram_counts = defaultdict(int)
-        for word in all_words:
+        for word in tqdm(all_words):
             unigram_counts[word] += 1
         total_words = sum(unigram_counts.values())
         
         unigram_probs = {
             word: count / total_words 
-            for word, count in unigram_counts.items()
+            for word, count in tqdm(unigram_counts.items(), desc="Computing unigram probabilities")
         }
         
+        # Initialize n-gram structures
         bigram_counts = defaultdict(lambda: defaultdict(int))
         context_counts = defaultdict(lambda: defaultdict(int))
         
+        # Build context and bigram counts
+        print("\nBuilding context models...")
         context_window = 10
-        for i in range(len(all_words) - context_window):
+        for i in tqdm(range(len(all_words) - context_window), desc="Processing word contexts"):
             context = tuple(all_words[i:i + context_window])
             next_word = all_words[i + context_window]
             context_counts[context][next_word] += 1
@@ -285,8 +295,9 @@ class SemanticGenerator:
             bigram_counts[prev_word][curr_word] += 1
         
         # Calculate context probabilities and divergence
+        print("\nCalculating context probabilities...")
         context_data = {}
-        for context, next_words in context_counts.items():
+        for context, next_words in tqdm(context_counts.items(), desc="Computing context probabilities"):
             total = sum(next_words.values())
             context_probs = {
                 word: count / total 
@@ -307,8 +318,9 @@ class SemanticGenerator:
             }
         
         # Calculate transition probabilities
+        print("\nCalculating transition probabilities...")
         transition_probs = {}
-        for prev_word, next_words in bigram_counts.items():
+        for prev_word, next_words in tqdm(bigram_counts.items(), desc="Computing transitions"):
             total = sum(next_words.values())
             transition_probs[prev_word] = {
                 word: count / total 
@@ -316,6 +328,7 @@ class SemanticGenerator:
             }
         
         # Create model dump
+        print("\nPreparing model dump...")
         model_dump = {
             'unigram_probs': unigram_probs,
             'bigram_counts': dict(bigram_counts),
@@ -327,7 +340,7 @@ class SemanticGenerator:
         with open('language_model_dump.pkl', 'wb') as f:
             pickle.dump(model_dump, f)
             
-        print("Language models dumped to language_model_dump.pkl")
+        print("\nLanguage models successfully dumped to language_model_dump.pkl")
 
 class NaturalTextGenerator:
     def __init__(self, prob_file='semantic_generator_probabilities.pkl', model_file='language_model_dump.pkl'):
