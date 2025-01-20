@@ -492,7 +492,7 @@ class NaturalTextGenerator:
                 # Randomly boost lower probability words
                 boost_threshold = random.uniform(0.1, 0.2)
                 for word, prob in sigmoid_probs.items():
-                    if prob < boost_threshold:
+                    if prob < boost_threshold and _ % self.context_window == 0:
                         sigmoid_probs[word] *= random.uniform(20.1, 100.2)
                 
                 # Apply temperature scaling
