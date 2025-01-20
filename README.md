@@ -62,7 +62,7 @@ python text_generator.py
 Example interaction:
 ```
 User: The sun was setting behind the mountains
-AI: The sun was setting behind the mountains and casting long shadows across the quiet valley. Birds soared gracefully through the golden sky while gentle breezes carried the sweet scent of wildflowers.
+AI: The sun was setting behind the mountains in the optimal policies actually have no idea of the other rules.
 ```
 
 ## How It Works
