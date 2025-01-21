@@ -40,7 +40,7 @@ The system operates in two modes:
 Train a new model on your text data:
 
 ```bash
-python text_generator.py
+python synthreason.py
 # Choose option 1
 # Enter the path to your training text file
 ```
@@ -54,15 +54,15 @@ This will create two model files:
 Generate text continuations using a trained model:
 
 ```bash
-python text_generator.py
+python synthreason.py
 # Choose option 2
 # Enter your prompts
 ```
 
 Example interaction:
 ```
-User: existence is
-AI: existence is the first kind of techniques for this chapter was developed and a function that can be the core of the world
+Is there inherent order in nature or is it all chaos and chance?
+AI: Is there inherent order in nature or is it all chaos and chance? Clear that the interview data and the speaker to the researcher to the same arrays of the data and the intuitive concept of the same with the history of the nomad professors are not to be easily arbitrated. who are the idea that are not a model of the individuals are not be the theory of the case study of the qualitative research plan.
 ```
 
 ## How It Works
