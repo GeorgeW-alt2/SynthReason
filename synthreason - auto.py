@@ -7,6 +7,8 @@ import numpy as np
 
 KB_MEMORY = -1
 
+import re
+
 def clean_text(text: str) -> str:
     """Clean text using regular expressions."""
     # Remove URLs
@@ -57,7 +59,12 @@ def clean_text(text: str) -> str:
     # Ensure there's a period at the end if not already ended with punctuation
     if text and not text[-1] in '.!?':
         text += '.'
-        
+
+    # Filter out words of length 1 that aren't "I" or "a"
+    words = text.split()
+    filtered_words = [word for word in words if len(word) > 1 or word.lower() in ('i', 'a')]
+    text = ' '.join(filtered_words)
+    
     return text
 
 class SemanticGenerator:
@@ -500,86 +507,86 @@ class NaturalTextGenerator:
         for _ in range(num_words):
             try:
                 # Get dynamic context window
-                context_window = min(random.randint(1, self.context_window), len(words))
-                context_start = max(0, len(words) - context_window)
-                recent_context = tuple(words[context_start:])
-                
-                if recent_context in self.forward_context:
-                    next_word_probs = self.forward_context[recent_context]
+                context_window = _
+                for context_start in range(3):
+                    recent_context = tuple(words[context_start:])
                     
-                    # Get divergence score
-                    divergence = self.context_divergence.get(recent_context, 0)
-                    
-                    # Adjust temperature
-                    local_temp = temperature
-                    if divergence > self.divergence_threshold:
-                        local_temp *= (1 + divergence)
-                    else:
-                        local_temp *= max(0.5, 1 - divergence)
-                    
-                    # Apply sigmoid with noise
-                    noise_factor = random.uniform(0.1, 0.2) * (1 + divergence)
-                    sigmoid_probs = {
-                        word: sigmoid(prob * local_temp * noise_factor)
-                        for word, prob in next_word_probs.items()
-                    }
-                    
-                    # Boost low probabilities
-                    boost_threshold = random.uniform(0.1, 0.2) * (1 + divergence)
-                    for word, prob in sigmoid_probs.items():
-                        if prob < boost_threshold and random.random() < divergence:
-                            boost_factor = random.uniform(1.1, 2.0) * (1 + divergence)
-                            sigmoid_probs[word] *= boost_factor
-                    
-                    # Temperature scaling
-                    adjusted_probs = {
-                        word: np.power(prob, 1/(local_temp * (1 + divergence)))
-                        for word, prob in sigmoid_probs.items()
-                    }
-                    
-                    # Normalize
-                    total = sum(adjusted_probs.values())
-                    if total > 0:
-                        adjusted_probs = {
-                            word: prob/total 
-                            for word, prob in adjusted_probs.items()
+                    if recent_context in self.forward_context:
+                        next_word_probs = self.forward_context[recent_context]
+                        
+                        # Get divergence score
+                        divergence = self.context_divergence.get(recent_context, 0)
+                        
+                        # Adjust temperature
+                        local_temp = temperature
+                        if divergence > self.divergence_threshold:
+                            local_temp *= (1 + divergence)
+                        else:
+                            local_temp *= max(0.5, 1 - divergence)
+                        
+                        # Apply sigmoid with noise
+                        noise_factor = random.uniform(0.1, 0.2) * (1 + divergence)
+                        sigmoid_probs = {
+                            word: sigmoid(prob * local_temp * noise_factor)
+                            for word, prob in next_word_probs.items()
                         }
                         
-                        # Select word based on divergence
-                        if random.random() < divergence:
-                            sorted_words = sorted(
-                                adjusted_probs.items(), 
-                                key=lambda x: x[1]
-                            )
-                            pool_size = max(1, int(len(sorted_words) * divergence))
-                            selection_pool = sorted_words[:pool_size]
-                            if selection_pool:
-                                next_word = random.choice(selection_pool)[0]
-                            else:
-                                next_word = self.generate_word_from_context(
-                                    words[-1] if words else None,
-                                    local_temp
+                        # Boost low probabilities
+                        boost_threshold = random.uniform(0.1, 0.2) * (1 + divergence)
+                        for word, prob in sigmoid_probs.items():
+                            if prob < boost_threshold and random.random() < divergence:
+                                boost_factor = random.uniform(1.1, 2.0) * (1 + divergence)
+                                sigmoid_probs[word] *= boost_factor
+                        
+                        # Temperature scaling
+                        adjusted_probs = {
+                            word: np.power(prob, 1/(local_temp * (1 + divergence)))
+                            for word, prob in sigmoid_probs.items()
+                        }
+                        
+                        # Normalize
+                        total = sum(adjusted_probs.values())
+                        if total > 0:
+                            adjusted_probs = {
+                                word: prob/total 
+                                for word, prob in adjusted_probs.items()
+                            }
+                            
+                            # Select word based on divergence
+                            if random.random() < divergence:
+                                sorted_words = sorted(
+                                    adjusted_probs.items(), 
+                                    key=lambda x: x[1]
                                 )
+                                pool_size = max(1, int(len(sorted_words) * divergence))
+                                selection_pool = sorted_words[:pool_size]
+                                if selection_pool:
+                                    next_word = random.choice(selection_pool)[0]
+                                else:
+                                    next_word = self.generate_word_from_context(
+                                        words[-1] if words else None,
+                                        local_temp
+                                    )
+                            else:
+                                next_word = random.choices(
+                                    list(adjusted_probs.keys()),
+                                    weights=list(adjusted_probs.values())
+                                )[0]
                         else:
-                            next_word = random.choices(
-                                list(adjusted_probs.keys()),
-                                weights=list(adjusted_probs.values())
-                            )[0]
+                            next_word = self.generate_word_from_context(
+                                words[-1] if words else None,
+                                local_temp
+                            )
                     else:
                         next_word = self.generate_word_from_context(
                             words[-1] if words else None,
-                            local_temp
+                            temperature
                         )
-                else:
-                    next_word = self.generate_word_from_context(
-                        words[-1] if words else None,
-                        temperature
-                    )
-                
-                if next_word:
-                    words.append(next_word)
-                    generated_words.append(next_word)
                     
+                    if next_word:
+                        words.append(next_word)
+                        generated_words.append(next_word)
+                        
             except Exception as e:
                 print(f"Warning: Error during word generation: {e}")
                 continue
@@ -598,7 +605,6 @@ def train_probs():
     """Train new model and create dumps."""
     from tqdm import tqdm
     generator = SemanticGenerator()
-    
     
     try:
         filename = input("Enter filename: ")
