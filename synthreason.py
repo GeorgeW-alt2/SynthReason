@@ -1,4 +1,4 @@
-#version 1.0 - George Wagenknecht
+#version 1.1
 import numpy as np
 import random
 import re
@@ -75,7 +75,7 @@ class ErrorAwareSemanticGenerator:
         diffs = [max(recent_errors[i], recent_errors[i-1]) 
                 for i in range(1, len(recent_errors))]
                 
-        return max(diffs) < self.convergence_threshold
+        return min(diffs) < self.convergence_threshold
 
     def train_until_convergence(self, text: str, max_epochs: int = 100) -> List[float]:
         """Train the model until convergence or maximum epochs reached."""
