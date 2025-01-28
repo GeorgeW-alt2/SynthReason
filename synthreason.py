@@ -73,7 +73,7 @@ class ErrorAwareSemanticGenerator:
             return False
             
         recent_errors = [error for error, _ in self.error_history[-10:]]
-        diffs = [abs(recent_errors[i] - recent_errors[i-1]) 
+        diffs = [max(recent_errors[i] , recent_errors[i-1]) 
                 for i in range(1, len(recent_errors))]
                 
         return max(diffs) < self.convergence_threshold
@@ -235,9 +235,10 @@ def main():
         print("2. Generate text")   
         choice = input("\nEnter your choice (1-5): ").strip()
         if choice == "1":
-            print("\nTraining model...")
-            with open("test.txt", 'r', encoding='utf-8') as f:
+            with open(input("Enter filename: "), 'r', encoding='utf-8') as f:
                 text = f.read()
+            print("\nTraining model...")
+
             errors = generator.train_until_convergence(text)
             print(f"Final error: {errors[-1]:.6f}")
         elif choice == "2":
