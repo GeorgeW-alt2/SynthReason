@@ -1,3 +1,4 @@
+#version 1.0 - George Wagenknecht
 import numpy as np
 import random
 import re
