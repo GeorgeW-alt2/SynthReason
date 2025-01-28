@@ -233,7 +233,7 @@ def main():
         print("\nOptions:")
         print("1. Train model")
         print("2. Generate text")   
-        choice = input("\nEnter your choice (1-5): ").strip()
+        choice = input("\nEnter your choice (1-2): ").strip()
         if choice == "1":
             with open(input("Enter filename: "), 'r', encoding='utf-8') as f:
                 text = f.read()
