@@ -67,38 +67,6 @@ class ErrorAwareSemanticGenerator:
         else:
             return 'nouns'
 
-    def verify_error_bounds(self, time_steps: int) -> Tuple[float, float]:
-        """Verify error function remains bounded over time steps."""
-        max_error = float('-inf')
-        min_error = float('inf')
-        
-        for t in range(time_steps):
-            error_sum = 0.0
-            for idx, magnitude in zip(self.memory_indices, self.error_magnitudes):
-                spatial_term = 1.0 / (1.0 + abs(idx))
-                temporal_term = self.decay_rate ** t
-                error_sum += magnitude * spatial_term * temporal_term
-                
-            max_error = max(max_error, error_sum)
-            min_error = min(min_error, error_sum)
-            
-        return min_error, max_error
-
-    def verify_entropy_bounds(self, access_patterns: List[int]) -> float:
-        """Calculate and verify entropy remains within theoretical bounds."""
-        if not access_patterns:
-            return 0.0
-            
-        counts = np.bincount(access_patterns)
-        probabilities = counts[counts > 0] / len(access_patterns)
-        empirical_entropy = -np.sum(probabilities * np.log2(probabilities))
-        max_entropy = math.log2(len(self.words))
-        
-        assert 0 <= empirical_entropy <= max_entropy, \
-            "Entropy violates theoretical bounds"
-            
-        return empirical_entropy
-
     def check_convergence(self) -> bool:
         """Check if training has converged based on recent error history."""
         if len(self.error_history) < 10:
@@ -269,44 +237,6 @@ class ErrorAwareSemanticGenerator:
                 formatted_sentences.append(formatted)
         
         return ' '.join(formatted_sentences)
-
-    def save_model(self, filename: str):
-        """Save the model state to a file."""
-        model_state = {
-            'words': dict(self.words),
-            'context_transitions': dict(self.context_transitions),
-            'error_history': self.error_history,
-            'memory_indices': self.memory_indices,
-            'error_magnitudes': self.error_magnitudes,
-            'decay_rate': self.decay_rate,
-            'convergence_threshold': self.convergence_threshold,
-            'is_converged': self.is_converged,
-            'total_epochs': self.total_epochs
-        }
-        with open(filename, 'wb') as f:
-            pickle.dump(model_state, f)
-
-    def load_model(self, filename: str):
-        """Load model state from a file."""
-        with open(filename, 'rb') as f:
-            model_state = pickle.load(f)
-        
-        self.words = defaultdict(lambda: defaultdict(Counter))
-        for context, categories in model_state['words'].items():
-            for category, counter in categories.items():
-                self.words[context][category].update(counter)
-        
-        self.context_transitions = defaultdict(Counter)
-        for context, transitions in model_state['context_transitions'].items():
-            self.context_transitions[context].update(transitions)
-        
-        self.error_history = model_state['error_history']
-        self.memory_indices = model_state['memory_indices']
-        self.error_magnitudes = model_state['error_magnitudes']
-        self.decay_rate = model_state['decay_rate']
-        self.convergence_threshold = model_state['convergence_threshold']
-        self.is_converged = model_state['is_converged']
-        self.total_epochs = model_state['total_epochs']
 
 model = "model.pkl"
 def main():
