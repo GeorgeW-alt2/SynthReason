@@ -3,6 +3,7 @@ import random
 import re
 import pickle
 import math
+import os
 from collections import defaultdict, Counter, deque
 from typing import List, Tuple, Dict, Any, Optional, Deque
 
@@ -15,8 +16,7 @@ class ContextWindow:
         self.window.append(word)
     
     def add_multiple(self, words: List[str]):
-        """Add multiple words to the context window."""
-        for word in words[-self.size:]:  # Only take last n words if more than window size
+        for word in words[-self.size:]:
             self.window.append(word)
     
     def get_context(self) -> str:
@@ -37,25 +37,24 @@ class ErrorAwareSemanticGenerator:
         self.is_converged = False
         self.total_epochs = 0
         self.context_window = ContextWindow(context_size)
+        self.context_size = context_size
 
     def clean_text(self, text: str) -> str:
-        """Clean and normalize input text."""
-        text = re.sub(r'https?://\S+|www\.\S+', '', text)  # Remove URLs
-        text = re.sub(r'\S+@\S+', '', text)  # Remove email addresses
-        text = re.sub(r'\d+', '', text)  # Remove numbers
-        text = re.sub(r'[^A-Za-z0-9\s.,!?\'-]', '', text)  # Keep basic punctuation
-        text = re.sub(r'\s+', ' ', text)  # Normalize whitespace
+        text = re.sub(r'https?://\S+|www\.\S+', '', text)
+        text = re.sub(r'\S+@\S+', '', text)
+        text = re.sub(r'\d+', '', text)
+        text = re.sub(r'[^A-Za-z0-9\s.,!?\'-]', '', text)
+        text = re.sub(r'\s+', ' ', text)
         text = text.strip()
         
         if text and text[0].isalpha():
-            text = text[0].upper() + text[1:]  # Capitalize first letter
+            text = text[0].upper() + text[1:]
         if text and text[-1] not in '.!?':
-            text += '.'  # Ensure proper ending
+            text += '.'
             
         return text
 
     def _categorize_word(self, word: str) -> str:
-        """Categorize word into linguistic categories."""
         if word.endswith('ly'):
             return 'adverbs'
         elif word.endswith('ed') or word.endswith('ing'):
@@ -68,12 +67,11 @@ class ErrorAwareSemanticGenerator:
             return 'nouns'
 
     def check_convergence(self) -> bool:
-        """Check if training has converged based on recent error history."""
         if len(self.error_history) < 10:
             return False
             
         recent_errors = [error for error, _ in self.error_history[-10:]]
-        diffs = [max(recent_errors[i] , recent_errors[i-1]) 
+        diffs = [max(recent_errors[i], recent_errors[i-1]) 
                 for i in range(1, len(recent_errors))]
                 
         return max(diffs) < self.convergence_threshold
@@ -134,18 +132,15 @@ class ErrorAwareSemanticGenerator:
         return epoch_errors
 
     def generate_text(self, num_words: int = 50) -> str:
-        """Generate text using multi-word input and context-aware generation."""
         if not self.is_converged:
-            print("Warning: Model has not converged. Results may be unreliable.")
+            print("Warning: Model not trained or loaded. Results may be unreliable.")
             
         generated_words = []
         self.context_window.clear()
-        
-        # Get multi-word input from user
+        print()
         input_text = input("Enter starting words (space-separated): ").lower().strip()
         initial_words = [word.strip('.,!?') for word in input_text.split()]
         
-        # Initialize context window with input words
         self.context_window.add_multiple(initial_words)
         generated_words.extend(initial_words)
         
@@ -156,14 +151,12 @@ class ErrorAwareSemanticGenerator:
         while len(generated_words) < num_words and attempts < max_attempts:
             attempts += 1
             
-            # Try context-based generation first
             context = self.context_window.get_context()
             if context in self.context_transitions and self.context_transitions[context]:
                 candidates = list(self.context_transitions[context].items())
                 words, counts = zip(*candidates)
                 next_word = random.choices(words, weights=counts)[0]
             else:
-                # Fall back to category-based generation
                 if current_word not in self.words:
                     current_word = random.choice(generated_words[-3:] or ['start'])
                     continue
@@ -192,18 +185,16 @@ class ErrorAwareSemanticGenerator:
                 
                 next_word = random.choices(available_words, weights=word_weights)[0]
             
-            if next_word != generated_words[-1]:  # Avoid repetition
+            if next_word != generated_words[-1]:
                 generated_words.append(next_word)
                 self.context_window.add(next_word)
                 current_word = next_word
             
-            # Check for end of sentence
             if next_word.endswith('.'):
                 self.context_window.clear()
-                if len(generated_words) < num_words:  # Start new sentence if needed
+                if len(generated_words) < num_words:
                     self.context_window.add_multiple(generated_words[-min(3, len(generated_words)):])
         
-        # Format text with proper capitalization and punctuation
         text = ' '.join(generated_words)
         sentences = text.split('.')
         formatted_sentences = []
@@ -216,40 +207,160 @@ class ErrorAwareSemanticGenerator:
         
         return ' '.join(formatted_sentences)
 
-model = "model.pkl"
+    def save_model(self, filepath: str):
+        try:
+            model_state = {
+                'words': {
+                    context: {
+                        category: dict(counter)
+                        for category, counter in categories.items()
+                    }
+                    for context, categories in self.words.items()
+                },
+                'context_transitions': {
+                    context: dict(transitions)
+                    for context, transitions in self.context_transitions.items()
+                },
+                'error_history': self.error_history,
+                'memory_indices': self.memory_indices,
+                'error_magnitudes': self.error_magnitudes,
+                'decay_rate': self.decay_rate,
+                'convergence_threshold': self.convergence_threshold,
+                'is_converged': self.is_converged,
+                'total_epochs': self.total_epochs,
+                'context_size': self.context_size
+            }
+            
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            with open(filepath, 'wb') as f:
+                pickle.dump(model_state, f)
+            
+        except Exception as e:
+            raise Exception(f"Failed to save model: {str(e)}")
+
+    def load_model(self, filepath: str):
+        try:
+            with open(filepath, 'rb') as f:
+                model_state = pickle.load(f)
+            
+            self.words = defaultdict(lambda: defaultdict(Counter))
+            for context, categories in model_state['words'].items():
+                for category, words in categories.items():
+                    self.words[context][category].update(words)
+            
+            self.context_transitions = defaultdict(Counter)
+            for context, transitions in model_state['context_transitions'].items():
+                self.context_transitions[context].update(transitions)
+            
+            self.error_history = model_state['error_history']
+            self.memory_indices = model_state['memory_indices']
+            self.error_magnitudes = model_state['error_magnitudes']
+            self.decay_rate = model_state['decay_rate']
+            self.convergence_threshold = model_state['convergence_threshold']
+            self.is_converged = model_state['is_converged']
+            self.total_epochs = model_state['total_epochs']
+            self.context_size = model_state.get('context_size', 5)
+            
+            self.context_window = ContextWindow(self.context_size)
+            
+        except Exception as e:
+            raise Exception(f"Failed to load model: {str(e)}")
+
 def main():
-    """Main function demonstrating usage of the generator."""
     print("Multi-Word Context-Aware Semantic Text Generator")
     print("=============================================")
     
-    # Initialize generator with custom parameters
     generator = ErrorAwareSemanticGenerator(
         decay_rate=0.25,
         convergence_threshold=1e-6,
-        context_size=15  # Increased context size for better coherence
+        context_size=15
     )
+    
+    if not os.path.exists('models'):
+        os.makedirs('models')
     
     while True:
         print("\nOptions:")
         print("1. Train model")
-        print("2. Generate text")   
-        choice = input("\nEnter your choice (1-2): ").strip()
+        print("2. Generate text")
+        print("3. Save model")
+        print("4. Load model")
+        print("5. Exit")
+        
+        choice = input("\nEnter your choice (1-5): ").strip()
+        
         if choice == "1":
-            with open(input("Enter filename: "), 'r', encoding='utf-8') as f:
-                text = f.read()
-            print("\nTraining model...")
-
-            errors = generator.train_until_convergence(text)
-            print(f"Final error: {errors[-1]:.6f}")
-        elif choice == "2":
             try:
-                num_words = 500  # Fixed length for consistent output
+                filename = input("Enter filename: ")
+                with open(filename, 'r', encoding='utf-8') as f:
+                    text = f.read()
+                print("\nTraining model...")
+                errors = generator.train_until_convergence(text)
+                print(f"Final error: {errors[-1]:.6f}")
+                
+                model_path = os.path.join('models', 'auto_saved_model.pkl')
+                generator.save_model(model_path)
+                print(f"Model automatically saved to {model_path}")
+            except FileNotFoundError:
+                print("Error: Training file not found!")
+            except Exception as e:
+                print(f"Error during training: {e}")
+                
+        elif choice == "2":
+            if not generator.is_converged:
+                print("Warning: Model not trained or loaded. Results may be unreliable.")
+            try:
+                num_words = 500
                 while True:
                     generated_text = generator.generate_text(num_words)
                     print("\nGenerated text:")
                     print(generated_text)
+                    
             except ValueError as e:
-                print(f"Error: {e}") 
+                print(f"Error: {e}")
+                
+        elif choice == "3":
+            try:
+                model_name = input("Enter model name to save (will be saved in 'models' directory): ")
+                if not model_name.endswith('.pkl'):
+                    model_name += '.pkl'
+                model_path = os.path.join('models', model_name)
+                
+                generator.save_model(model_path)
+                print(f"Model saved successfully to {model_path}")
+            except Exception as e:
+                print(f"Error saving model: {e}")
+                
+        elif choice == "4":
+            try:
+                models = [f for f in os.listdir('models') if f.endswith('.pkl')]
+                if not models:
+                    print("No saved models found in 'models' directory.")
+                    continue
+                    
+                print("\nAvailable models:")
+                for i, model in enumerate(models, 1):
+                    print(f"{i}. {model}")
+                
+                choice = input("\nEnter model number to load (or filename): ").strip()
+                
+                if choice.isdigit() and 1 <= int(choice) <= len(models):
+                    model_name = models[int(choice) - 1]
+                else:
+                    model_name = choice if choice.endswith('.pkl') else choice + '.pkl'
+                
+                model_path = os.path.join('models', model_name)
+                generator.load_model(model_path)
+                print(f"Model loaded successfully from {model_path}")
+            except FileNotFoundError:
+                print("Error: Model file not found!")
+            except Exception as e:
+                print(f"Error loading model: {e}")
+                
+        elif choice == "5":
+            print("Goodbye!")
+            break
+            
         else:
             print("Invalid choice. Please try again.")
 
