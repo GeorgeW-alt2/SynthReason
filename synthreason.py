@@ -133,28 +133,6 @@ class ErrorAwareSemanticGenerator:
         print(f"Converged: {self.is_converged}")
         return epoch_errors
 
-    def verify_convergence(self, time_horizon: int) -> bool:
-        """Verify convergence conditions for error distribution."""
-        series_terms = []
-        for magnitude, t_i in self.error_history:
-            series = []
-            for t in range(t_i, time_horizon):
-                term = magnitude * (self.decay_rate ** (t - t_i))
-                series.append(abs(term))
-            series_terms.append(sum(series))
-        
-        total_sum = sum(series_terms)
-        is_bounded = np.isfinite(total_sum)
-        
-        if len(series_terms) > 1:
-            ratios = [series_terms[i+1]/series_terms[i] 
-                     for i in range(len(series_terms)-1)]
-            converges_geometrically = all(r < 1 for r in ratios)
-        else:
-            converges_geometrically = True
-            
-        return is_bounded and converges_geometrically
-
     def generate_text(self, num_words: int = 50) -> str:
         """Generate text using multi-word input and context-aware generation."""
         if not self.is_converged:
@@ -246,7 +224,7 @@ def main():
     
     # Initialize generator with custom parameters
     generator = ErrorAwareSemanticGenerator(
-        decay_rate=0.95,
+        decay_rate=0.25,
         convergence_threshold=1e-6,
         context_size=15  # Increased context size for better coherence
     )
