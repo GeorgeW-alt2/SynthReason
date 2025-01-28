@@ -3,24 +3,40 @@ import random
 import re
 import pickle
 import math
-from collections import defaultdict, Counter
-from typing import List, Tuple, Dict, Any, Optional
+from collections import defaultdict, Counter, deque
+from typing import List, Tuple, Dict, Any, Optional, Deque
+
+class ContextWindow:
+    def __init__(self, size: int = 3):
+        self.size = size
+        self.window: Deque[str] = deque(maxlen=size)
+    
+    def add(self, word: str):
+        self.window.append(word)
+    
+    def add_multiple(self, words: List[str]):
+        """Add multiple words to the context window."""
+        for word in words[-self.size:]:  # Only take last n words if more than window size
+            self.window.append(word)
+    
+    def get_context(self) -> str:
+        return ' '.join(self.window)
+    
+    def clear(self):
+        self.window.clear()
 
 class ErrorAwareSemanticGenerator:
-    """
-    A text generator that combines semantic analysis with error convergence monitoring.
-    Incorporates both probabilistic text generation and theoretical error bounds.
-    """
-    
-    def __init__(self, decay_rate: float = 0.95, convergence_threshold: float = 1e-6):
+    def __init__(self, decay_rate: float = 0.95, convergence_threshold: float = 1e-6, context_size: int = 5):
         self.words = defaultdict(lambda: defaultdict(Counter))
-        self.error_history: List[Tuple[float, int]] = []  # (magnitude, time)
+        self.context_transitions = defaultdict(Counter)
+        self.error_history: List[Tuple[float, int]] = []
         self.memory_indices: List[int] = []
         self.error_magnitudes: List[float] = []
         self.decay_rate = decay_rate
         self.convergence_threshold = convergence_threshold
         self.is_converged = False
         self.total_epochs = 0
+        self.context_window = ContextWindow(context_size)
 
     def clean_text(self, text: str) -> str:
         """Clean and normalize input text."""
@@ -31,11 +47,10 @@ class ErrorAwareSemanticGenerator:
         text = re.sub(r'\s+', ' ', text)  # Normalize whitespace
         text = text.strip()
         
-        # Capitalize first letter and ensure proper ending
         if text and text[0].isalpha():
-            text = text[0].upper() + text[1:]
+            text = text[0].upper() + text[1:]  # Capitalize first letter
         if text and text[-1] not in '.!?':
-            text += '.'
+            text += '.'  # Ensure proper ending
             
         return text
 
@@ -60,7 +75,6 @@ class ErrorAwareSemanticGenerator:
         for t in range(time_steps):
             error_sum = 0.0
             for idx, magnitude in zip(self.memory_indices, self.error_magnitudes):
-                # Calculate spatial and temporal components
                 spatial_term = 1.0 / (1.0 + abs(idx))
                 temporal_term = self.decay_rate ** t
                 error_sum += magnitude * spatial_term * temporal_term
@@ -97,10 +111,7 @@ class ErrorAwareSemanticGenerator:
         return max(diffs) < self.convergence_threshold
 
     def train_until_convergence(self, text: str, max_epochs: int = 100) -> List[float]:
-        """
-        Train the model until error convergence or maximum epochs reached.
-        Returns list of error values per epoch.
-        """
+        """Train the model until convergence or maximum epochs reached."""
         text = self.clean_text(text)
         sentences = text.split('.')
         epoch_errors = []
@@ -112,35 +123,38 @@ class ErrorAwareSemanticGenerator:
             
             for sentence in sentences:
                 words = sentence.lower().split()
-                prev_word = None
+                self.context_window.clear()
                 
                 for i, word in enumerate(words):
                     word = word.strip('.,!?')
-                    if word:
-                        category = self._categorize_word(word)
-                        context = prev_word if prev_word else 'start'
+                    if not word:
+                        continue
                         
-                        # Track memory access and calculate error
-                        self.memory_indices.append(i)
-                        error_magnitude = 1.0 if context not in self.words else 0.5
-                        self.error_magnitudes.append(error_magnitude)
-                        
-                        # Apply temporal decay
-                        decayed_error = error_magnitude * (self.decay_rate ** self.total_epochs)
-                        self.error_history.append((decayed_error, current_time))
-                        
-                        # Update model
-                        self.words[context][category][word] += 1
-                        
-                        epoch_error += decayed_error
-                        num_samples += 1
-                        prev_word = word
+                    # Update context transitions
+                    context = self.context_window.get_context()
+                    if context:
+                        self.context_transitions[context][word] += 1
+                    
+                    # Regular word-based training
+                    category = self._categorize_word(word)
+                    prev_word = words[i-1].strip('.,!?') if i > 0 else 'start'
+                    
+                    self.memory_indices.append(i)
+                    error_magnitude = 1.0 if prev_word not in self.words else 0.5
+                    self.error_magnitudes.append(error_magnitude)
+                    
+                    decayed_error = error_magnitude * (self.decay_rate ** self.total_epochs)
+                    self.error_history.append((decayed_error, current_time))
+                    
+                    self.words[prev_word][category][word] += 1
+                    self.context_window.add(word)
+                    
+                    epoch_error += decayed_error
+                    num_samples += 1
             
-            # Calculate average error for epoch
             avg_epoch_error = epoch_error / num_samples if num_samples > 0 else 0
             epoch_errors.append(avg_epoch_error)
             
-            # Check convergence
             self.is_converged = self.check_convergence()
             self.total_epochs += 1
             
@@ -174,62 +188,93 @@ class ErrorAwareSemanticGenerator:
         return is_bounded and converges_geometrically
 
     def generate_text(self, num_words: int = 50) -> str:
-        """Generate text using the trained model."""
+        """Generate text using multi-word input and context-aware generation."""
         if not self.is_converged:
             print("Warning: Model has not converged. Results may be unreliable.")
             
         generated_words = []
-        current_word = input("USER: ")
+        self.context_window.clear()
+        
+        # Get multi-word input from user
+        input_text = input("Enter starting words (space-separated): ").lower().strip()
+        initial_words = [word.strip('.,!?') for word in input_text.split()]
+        
+        # Initialize context window with input words
+        self.context_window.add_multiple(initial_words)
+        generated_words.extend(initial_words)
+        
+        current_word = initial_words[-1] if initial_words else 'start'
         attempts = 0
-        max_attempts = num_words * 2  # Prevent infinite loops
+        max_attempts = num_words * 2
         
         while len(generated_words) < num_words and attempts < max_attempts:
             attempts += 1
             
-            # If current word has no following words, try starting over
-            if current_word not in self.words or not self.words[current_word]:
-                current_word = 'start'
-                continue
+            # Try context-based generation first
+            context = self.context_window.get_context()
+            if context in self.context_transitions and self.context_transitions[context]:
+                candidates = list(self.context_transitions[context].items())
+                words, counts = zip(*candidates)
+                next_word = random.choices(words, weights=counts)[0]
+            else:
+                # Fall back to category-based generation
+                if current_word not in self.words:
+                    current_word = random.choice(generated_words[-3:] or ['start'])
+                    continue
                 
-            # Get all categories and their total counts for current word
-            categories = []
-            weights = []
-            for category, word_counts in self.words[current_word].items():
-                if word_counts:  # Only include non-empty categories
-                    categories.append(category)
-                    weights.append(sum(word_counts.values()))
-            
-            if not categories:
-                current_word = 'start'
-                continue
+                categories = []
+                weights = []
+                for category, word_counts in self.words[current_word].items():
+                    if word_counts:
+                        categories.append(category)
+                        weights.append(sum(word_counts.values()))
                 
-            # Select category based on weights
-            category = random.choices(categories, weights=weights)[0]
-            
-            # Get all words and their counts in the selected category
-            available_words = []
-            word_weights = []
-            for word, count in self.words[current_word][category].items():
-                available_words.append(word)
-                word_weights.append(count)
-            
-            if not available_words:
-                current_word = 'start'
-                continue
+                if not categories:
+                    current_word = random.choice(generated_words[-3:] or ['start'])
+                    continue
                 
-            # Select word based on weights
-            word = random.choices(available_words, weights=word_weights)[0]
+                category = random.choices(categories, weights=weights)[0]
+                available_words = []
+                word_weights = []
+                for word, count in self.words[current_word][category].items():
+                    available_words.append(word)
+                    word_weights.append(count)
+                
+                if not available_words:
+                    current_word = random.choice(generated_words[-3:] or ['start'])
+                    continue
+                
+                next_word = random.choices(available_words, weights=word_weights)[0]
             
-            if len(generated_words) == 0 or word != generated_words[-1]:  # Avoid repetition
-                generated_words.append(word)
-                current_word = word
+            if next_word != generated_words[-1]:  # Avoid repetition
+                generated_words.append(next_word)
+                self.context_window.add(next_word)
+                current_word = next_word
             
-        return ' '.join(generated_words).capitalize() + '.'
+            # Check for end of sentence
+            if next_word.endswith('.'):
+                self.context_window.clear()
+                if len(generated_words) < num_words:  # Start new sentence if needed
+                    self.context_window.add_multiple(generated_words[-min(3, len(generated_words)):])
+        
+        # Format text with proper capitalization and punctuation
+        text = ' '.join(generated_words)
+        sentences = text.split('.')
+        formatted_sentences = []
+        
+        for sentence in sentences:
+            if sentence.strip():
+                formatted = sentence.strip()
+                formatted = formatted[0].upper() + formatted[1:] + '.'
+                formatted_sentences.append(formatted)
+        
+        return ' '.join(formatted_sentences)
 
-    def save_model(self, model: str):
+    def save_model(self, filename: str):
         """Save the model state to a file."""
         model_state = {
             'words': dict(self.words),
+            'context_transitions': dict(self.context_transitions),
             'error_history': self.error_history,
             'memory_indices': self.memory_indices,
             'error_magnitudes': self.error_magnitudes,
@@ -241,18 +286,20 @@ class ErrorAwareSemanticGenerator:
         with open(filename, 'wb') as f:
             pickle.dump(model_state, f)
 
-    def load_model(self, model: str):
+    def load_model(self, filename: str):
         """Load model state from a file."""
         with open(filename, 'rb') as f:
             model_state = pickle.load(f)
         
-        # Reconstruct defaultdict structure
         self.words = defaultdict(lambda: defaultdict(Counter))
         for context, categories in model_state['words'].items():
             for category, counter in categories.items():
                 self.words[context][category].update(counter)
-                
-        # Load other attributes
+        
+        self.context_transitions = defaultdict(Counter)
+        for context, transitions in model_state['context_transitions'].items():
+            self.context_transitions[context].update(transitions)
+        
         self.error_history = model_state['error_history']
         self.memory_indices = model_state['memory_indices']
         self.error_magnitudes = model_state['error_magnitudes']
@@ -260,87 +307,40 @@ class ErrorAwareSemanticGenerator:
         self.convergence_threshold = model_state['convergence_threshold']
         self.is_converged = model_state['is_converged']
         self.total_epochs = model_state['total_epochs']
+
 model = "model.pkl"
 def main():
     """Main function demonstrating usage of the generator."""
-    print("Error-Aware Semantic Text Generator")
-    print("==================================")
+    print("Multi-Word Context-Aware Semantic Text Generator")
+    print("=============================================")
     
+    # Initialize generator with custom parameters
     generator = ErrorAwareSemanticGenerator(
-        decay_rate=0.35,
-        convergence_threshold=1e-6
+        decay_rate=0.95,
+        convergence_threshold=1e-6,
+        context_size=15  # Increased context size for better coherence
     )
     
     while True:
         print("\nOptions:")
-        print("1. Train on new text")
-        print("2. Generate text")
-        print("3. Analyze error convergence")
-        print("4. Save model")
-        print("5. Load model")
-        print("6. Exit")
-        
-        choice = input("\nEnter your choice (1-6): ").strip()
-        
+        print("1. Train model")
+        print("2. Generate text")   
+        choice = input("\nEnter your choice (1-5): ").strip()
         if choice == "1":
-            text = input("Enter text to train on (or 'file:' followed by filename): ")
-            if text.startswith('file:'):
-                filename = text[5:].strip()
-                try:
-                    with open(filename, 'r', encoding='utf-8') as f:
-                        text = f.read()
-                except FileNotFoundError:
-                    print("File not found!")
-                    continue
-            
             print("\nTraining model...")
+            with open("test.txt", 'r', encoding='utf-8') as f:
+                text = f.read()
             errors = generator.train_until_convergence(text)
             print(f"Final error: {errors[-1]:.6f}")
-            
         elif choice == "2":
             try:
-                num_words = 250
+                num_words = 500  # Fixed length for consistent output
                 while True:
                     generated_text = generator.generate_text(num_words)
                     print("\nGenerated text:")
                     print(generated_text)
-            except ValueError:
-                print("Please enter a valid number!")
-                
-        elif choice == "3":
-            try:
-                time_steps = int(input("Enter number of time steps to analyze: "))
-                min_error, max_error = generator.verify_error_bounds(time_steps)
-                print(f"\nError bounds: [{min_error:.6f}, {max_error:.6f}]")
-                
-                # Verify convergence
-                converged = generator.verify_convergence(time_steps)
-                print(f"Convergence status: {'Converged' if converged else 'Not converged'}")
-                
-                # Calculate entropy if we have access patterns
-                if generator.memory_indices:
-                    entropy = generator.verify_entropy_bounds(generator.memory_indices)
-                    print(f"Empirical entropy: {entropy:.6f}")
-            except ValueError:
-                print("Please enter a valid number!")
-                
-        elif choice == "4":
-            filename = input("Enter filename to save model: ")
-            generator.save_model(model)
-            print("Model saved successfully!")
-            
-        elif choice == "5":
-            filename = input("Enter filename to load model: ")
-            try:
-                generator.load_model(model)
-                print("Model loaded successfully!")
-            except FileNotFoundError:
-                print("File not found!")
-                
-        elif choice == "6":
-            print("Goodbye!")
-            break
-            
+            except ValueError as e:
+                print(f"Error: {e}") 
         else:
             print("Invalid choice. Please try again.")
 
