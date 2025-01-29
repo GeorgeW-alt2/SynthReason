@@ -41,7 +41,7 @@ class ErrorAwareSemanticGenerator:
         self.total_epochs = 0
         self.context_window = ContextWindow(context_size)
         self.context_size = context_size
-        self.window_size = 10  # Size of window for rolling statistics
+        self.window_size = 20  # Size of window for rolling statistics
 
     def clean_text(self, text: str) -> str:
         text = re.sub(r'https?://\S+|www\.\S+', '', text)
@@ -241,8 +241,11 @@ class ErrorAwareSemanticGenerator:
                         # Apply sigma-based adjustment
                         adjusted_weight = total_count * sigma_factor
                         categories.append(category)
+                        categories.append(category)
+
                         weights.append(adjusted_weight)
-                
+                        weights.append(total_count * current_sigma)
+
                 if not categories:
                     current_word = random.choice(generated_words[-3:] or ['start'])
                     continue
