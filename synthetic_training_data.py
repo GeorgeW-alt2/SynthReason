@@ -621,7 +621,7 @@ def main():
             try:
                 iterations = 60
                 base_words = 5
-                final_words = 150
+                final_words = 20
                 temperature = 0.7
                 while True:
                     seed_text = input("Enter seed text: ")
@@ -634,8 +634,9 @@ def main():
                         temperature=temperature
                     )
                 
-                    print("\nGenerated text:")
-                    print(generated_text)
+                    print("Added sythetic training data.")
+                    with open('output.txt', 'a') as file:
+                        file.write(generated_text)
                 
             except ValueError as e:
                 print(f"Error: {e}")
