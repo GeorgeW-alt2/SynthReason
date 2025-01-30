@@ -142,7 +142,7 @@ class ErrorAwareSemanticGenerator:
                         
                     # Update context transitions
                     context = self.context_window.get_context()
-                    if context:
+                    if context and self.check_convergence():
                         self.context_transitions[context][word] += self.calculate_rolling_sigma()
                     
                     # Regular word-based training with error tracking
