@@ -143,14 +143,14 @@ class ErrorAwareSemanticGenerator:
                     # Update context transitions
                     context = self.context_window.get_context()
                     if context:
-                        self.context_transitions[context][word] += 1
+                        self.context_transitions[context][word] += self.calculate_rolling_sigma()
                     
                     # Regular word-based training with error tracking
                     category = self._categorize_word(word)
                     prev_word = words[i-1].strip('.,!?') if i > 0 else 'start'
                     
                     self.memory_indices.append(i)
-                    error_magnitude = 1.0 if prev_word not in self.words else 0.5
+                    error_magnitude = self.calculate_rolling_sigma() if prev_word not in self.words else 0.5
                     self.error_magnitudes.append(error_magnitude)
                     
                     # Calculate decayed error
@@ -192,14 +192,16 @@ class ErrorAwareSemanticGenerator:
         return epoch_errors
 
     def generate_text(self, num_words: int = 50) -> str:
-        if not self.is_converged:
-            print("Warning: Model not trained or loaded. Results may be unreliable.")
+        
             
         generated_words = []
         self.context_window.clear()
-        print()
+        
         input_text = input("Enter starting words (space-separated): ").lower().strip()
         initial_words = [word.strip('.,!?') for word in input_text.split()]
+        
+        if not initial_words:
+            initial_words = ['start']
         
         self.context_window.add_multiple(initial_words)
         generated_words.extend(initial_words)
@@ -213,83 +215,82 @@ class ErrorAwareSemanticGenerator:
         sigma_factor = 1.0 / (1.0 + current_sigma) if current_sigma != float('inf') else 0.5
         
         while len(generated_words) < num_words and attempts < max_attempts:
-            attempts += 1
-            
-            context = self.context_window.get_context()
-            if context in self.context_transitions and self.context_transitions[context]:
-                candidates = list(self.context_transitions[context].items())
-                words, counts = zip(*candidates)
+            try:
+                attempts += 1
                 
-                # Adjust weights based on sigma stability
-                adjusted_counts = [count * sigma_factor for count in counts]
-                next_word = random.choices(words, weights=adjusted_counts)[0]
-            else:
-                if current_word not in self.words:
-                    current_word = random.choice(generated_words[-3:] or ['start'])
-                    continue
+                context = self.context_window.get_context()
+                if context in self.context_transitions and self.context_transitions[context]:
+                    candidates = list(self.context_transitions[context].items())
+                    if not candidates:
+                        raise ValueError("No candidates found in context transitions")
+                    
+                    words, counts = zip(*candidates)
+                    if not words or not counts:
+                        raise ValueError("Empty words or counts in context transitions")
+                    
+                    # Adjust weights based on sigma stability
+                    adjusted_counts = [max(0.1, count * sigma_factor) for count in counts]  # Ensure non-zero weights
+                    next_word = random.choices(words, weights=adjusted_counts)[0]
+                else:
+                    if current_word not in self.words:
+                        # Fallback to a random previous word or 'start'
+                        current_word = random.choice(generated_words[-3:] if generated_words else ['start'])
+                        continue
+                    
+                    categories = []
+                    weights = []
+                    
+                    # Calculate category weights with sigma consideration
+                    for category, word_counts in self.words[current_word].items():
+                        if word_counts:
+                            total_count = sum(word_counts.values())
+                            adjusted_weight = max(0.1, total_count * sigma_factor)  # Ensure non-zero weights
+                            categories.append(category)
+                            weights.append(adjusted_weight)
+                    
+                    if not categories:
+                        # Fallback to a random previous word or 'start'
+                        current_word = random.choice(generated_words[-3:] if generated_words else ['start'])
+                        continue
+                    
+                    # Apply stability-adjusted selection
+                    category = random.choices(categories, weights=weights)[0]
+                    
+                    available_words = []
+                    word_weights = []
+                    
+                    # Select words within the chosen category
+                    for word, count in self.words[current_word][category].items():
+                        available_words.append(word)
+                        adjusted_weight = max(0.1, count * sigma_factor)  # Ensure non-zero weights
+                        word_weights.append(adjusted_weight)
+                    
+                    if not available_words:
+                        continue
+                    
+                    next_word = random.choices(available_words, weights=word_weights)[0]
                 
-                categories = []
-                weights = []
-                category_counts = defaultdict(float)
+                if next_word != (generated_words[-1] if generated_words else ''):
+                    generated_words.append(next_word)
+                    self.context_window.add(next_word)
+                    current_word = next_word
                 
-                # Calculate category weights with sigma consideration
-                for category, word_counts in self.words[current_word].items():
-                    if word_counts:
-                        total_count = sum(word_counts.values())
-                        category_counts[category] = total_count
+                    # Update sigma factor periodically
+                    if len(generated_words) % 10 == 0:
+                        current_sigma = self.calculate_rolling_sigma()
+                        sigma_factor = 1.0 / (1.0 + current_sigma) if current_sigma != float('inf') else 0.5
+                
+                if next_word.endswith('.'):
+                    self.context_window.clear()
+                    if len(generated_words) < num_words:
+                        self.context_window.add_multiple(generated_words[-min(3, len(generated_words)):])
                         
-                        # Apply sigma-based adjustment
-                        adjusted_weight = total_count * sigma_factor
-                        categories.append(category)
-                        categories.append(category)
-
-                        weights.append(adjusted_weight)
-                        weights.append(total_count * current_sigma)
-
-                if not categories:
-                    current_word = random.choice(generated_words[-3:] or ['start'])
-                    continue
-                
-                # Calculate stability metric for the current choices
-                mean_weight = sum(weights) / len(weights) if weights else 0
-                weight_variance = sum((w - mean_weight) ** 2 for w in weights) / len(weights) if weights else 0
-                choice_stability = 1.0 / (1.0 + math.sqrt(weight_variance))
-                
-                # Apply stability-adjusted selection
-                adjusted_weights = [w * choice_stability for w in weights]
-                category = random.choices(categories, weights=adjusted_weights)[0]
-                
-                available_words = []
-                word_weights = []
-                
-                # Select words within the chosen category
-                for word, count in self.words[current_word][category].items():
-                    available_words.append(word)
-                    # Apply both sigma and category stability factors
-                    adjusted_weight = count * sigma_factor * choice_stability
-                    word_weights.append(adjusted_weight)
-                
-                if not available_words:
-                    current_word = random.choice(generated_words[-3:] or ['start'])
-                    continue
-                
-                next_word = random.choices(available_words, weights=word_weights)[0]
-            
-            if next_word != generated_words[-1]:
-                generated_words.append(next_word)
-                self.context_window.add(next_word)
-                current_word = next_word
-            
-                # Update sigma factor periodically
-                if len(generated_words) % 10 == 0:
-                    current_sigma = self.calculate_rolling_sigma()
-                    sigma_factor = 1.0 / (1.0 + current_sigma) if current_sigma != float('inf') else 0.5
-            
-            if next_word.endswith('.'):
-                self.context_window.clear()
-                if len(generated_words) < num_words:
-                    self.context_window.add_multiple(generated_words[-min(3, len(generated_words)):])
+            except Exception as e:
+                print(f"Warning: Error during generation ({str(e)}), continuing with fallback...")
+                current_word = random.choice(generated_words[-3:] if generated_words else ['start'])
+                continue
         
+        # Format the generated text
         text = ' '.join(generated_words)
         sentences = text.split('.')
         formatted_sentences = []
