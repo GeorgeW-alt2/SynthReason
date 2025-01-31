@@ -18,7 +18,7 @@ class DocumentProcessor:
 
     def load_document(self, filename: str) -> bool:
         try:
-            with open(filename, 'r') as file:
+            with open(filename, 'r', encoding='utf-8') as file:
                 self.data = file.read().lower()
             return True
         except Exception as e:
@@ -45,33 +45,6 @@ class DocumentProcessor:
         sentences = [s.strip() for s in self.data.split('.') if s.strip()]
         return [s for s in sentences if not pattern or pattern.lower() in s.lower()]
 
-    def process_document(self) -> Dict[str, Any]:
-        if not self.data:
-            return {"error": "No document loaded"}
-
-        results = {
-            "patterns": {},
-            "sentences": [],
-            "summary": {"total_sentences": len(self.get_matching_sentences()),
-                       "patterns_found": 0}
-        }
-
-        for pattern in self.syntax_patterns:
-            matching_sentences = self.get_matching_sentences(pattern)
-            if matching_sentences:
-                results["patterns"][pattern] = {
-                    "count": len(matching_sentences),
-                    "sentences": matching_sentences
-                }
-                results["summary"]["patterns_found"] += 1
-
-                for sentence in matching_sentences:
-                    sentence_result = self.process_sentence(sentence)
-                    if sentence_result and sentence_result not in results["sentences"]:
-                        results["sentences"].append(sentence_result)
-
-        return results
-
     def process_sentence(self, sentence: str) -> Dict[str, Any]:
         words = set(sentence.split())
         if self.category_filter:
@@ -90,13 +63,65 @@ class DocumentProcessor:
 
         return {
             "sentence": sentence,
-            "lexical_matches": lexical_matches or None
+            "matching_patterns": [],  # Will be populated in process_document
+            "lexical_matches": lexical_matches
         }
+
+    def process_document(self) -> Dict[str, Any]:
+        if not self.data:
+            return {"error": "No document loaded"}
+
+        # Initialize the results structure
+        results = {
+            "matched_content": [],  # List to store sentence-matches pairs
+            "summary": {
+                "total_sentences": len(self.get_matching_sentences()),
+                "total_patterns": len(self.syntax_patterns),
+                "patterns_with_matches": 0
+            }
+        }
+
+        # Track processed sentences to avoid duplicates
+        processed_sentences = set()
+
+        # Process each pattern
+        for pattern in self.syntax_patterns:
+            matching_sentences = self.get_matching_sentences(pattern)
+            if matching_sentences:
+                results["summary"]["patterns_with_matches"] += 1
+                
+                # Process each matching sentence
+                for sentence in matching_sentences:
+                    if sentence not in processed_sentences:
+                        sentence_result = self.process_sentence(sentence)
+                        if sentence_result:
+                            # Ensure fields are in the correct order by creating a new dict
+                            ordered_result = {
+                                "sentence": sentence_result["sentence"],
+                                "matching_patterns": [pattern],
+                                "lexical_matches": sentence_result["lexical_matches"]
+                            }
+                            results["matched_content"].append(ordered_result)
+                            processed_sentences.add(sentence)
+                        else:
+                            continue
+                    else:
+                        # If sentence was already processed, add this pattern to its matching_patterns
+                        for content in results["matched_content"]:
+                            if content["sentence"] == sentence:
+                                if "matching_patterns" not in content:
+                                    content["matching_patterns"] = []
+                                content["matching_patterns"].append(pattern)
+
+        # Add additional summary information
+        results["summary"]["sentences_with_matches"] = len(results["matched_content"])
+        
+        return results
 
 def main():
     processor = DocumentProcessor()
     if not all([
-        processor.load_document("test.txt"),
+        processor.load_document("kb.txt"),
         processor.load_vocab_file("descriptions.txt", "what"),
         processor.load_vocab_file("actions.txt", "how")
     ]):
