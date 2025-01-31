@@ -139,7 +139,7 @@ class DocumentProcessor:
 def main():
     processor = DocumentProcessor()
     if not all([
-        processor.load_document("kb.txt"),
+        processor.load_document("test.txt"),
         processor.load_vocab_file("descriptions.txt", "what"),
         processor.load_vocab_file("actions.txt", "how")
     ]):
