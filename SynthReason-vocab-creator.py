@@ -63,17 +63,16 @@ class DocumentProcessor:
 
         return {
             "sentence": sentence,
-            "matching_patterns": [],  # Will be populated in process_document
-            "lexical_matches": lexical_matches
+            "lexical_matches": lexical_matches,
+            "matching_patterns": []  # Will be populated in process_document
         }
 
     def process_document(self) -> Dict[str, Any]:
         if not self.data:
             return {"error": "No document loaded"}
 
-        # Initialize the results structure
         results = {
-            "matched_content": [],  # List to store sentence-matches pairs
+            "matched_content": [],
             "summary": {
                 "total_sentences": len(self.get_matching_sentences()),
                 "total_patterns": len(self.syntax_patterns),
@@ -81,66 +80,90 @@ class DocumentProcessor:
             }
         }
 
-        # Track processed sentences to avoid duplicates
         processed_sentences = set()
 
-        # Process each pattern
         for pattern in self.syntax_patterns:
             matching_sentences = self.get_matching_sentences(pattern)
             if matching_sentences:
                 results["summary"]["patterns_with_matches"] += 1
                 
-                # Process each matching sentence
                 for sentence in matching_sentences:
                     if sentence not in processed_sentences:
                         sentence_result = self.process_sentence(sentence)
                         if sentence_result:
-                            # Ensure fields are in the correct order by creating a new dict
                             ordered_result = {
                                 "sentence": sentence_result["sentence"],
-                                "matching_patterns": [pattern],
-                                "lexical_matches": sentence_result["lexical_matches"]
+                                "lexical_matches": sentence_result["lexical_matches"],
+                                "matching_patterns": [pattern]
                             }
                             results["matched_content"].append(ordered_result)
                             processed_sentences.add(sentence)
-                        else:
-                            continue
                     else:
-                        # If sentence was already processed, add this pattern to its matching_patterns
                         for content in results["matched_content"]:
                             if content["sentence"] == sentence:
                                 if "matching_patterns" not in content:
                                     content["matching_patterns"] = []
                                 content["matching_patterns"].append(pattern)
 
-        # Add additional summary information
         results["summary"]["sentences_with_matches"] = len(results["matched_content"])
-        
         return results
+
+    def save_new_vocab_files(self, results: Dict[str, Any]) -> None:
+        """Create new vocabulary files from the lexical matches in the results, organized by pattern."""
+        # Collect matches by pattern
+        pattern_vocab: Dict[str, Dict[str, Set[str]]] = {}
+        
+        for content in results["matched_content"]:
+            for pattern in content["matching_patterns"]:
+                if pattern not in pattern_vocab:
+                    pattern_vocab[pattern] = {}
+                for category, matches in content["lexical_matches"].items():
+                    if category not in pattern_vocab[pattern]:
+                        pattern_vocab[pattern][category] = set()
+                    pattern_vocab[pattern][category].update(matches)
+
+        # Save each pattern's matches to a file
+        for pattern in pattern_vocab:
+            output_filename = f"{pattern}.txt"
+            try:
+                with open(output_filename, 'w', encoding='utf-8') as f:
+                    # Write matches by category
+                    for category, words in pattern_vocab[pattern].items():
+                        for word in sorted(words):
+                            f.write(f"{word}\n")
+                        f.write("\n")
+                self.logger.info(f"Created vocabulary file for pattern: {output_filename}")
+            except Exception as e:
+                self.logger.error(f"Error saving vocabulary file {output_filename}: {e}")
 
 def main():
     processor = DocumentProcessor()
     if not all([
-        processor.load_document("test.txt"),
+        processor.load_document("kb.txt"),
         processor.load_vocab_file("descriptions.txt", "what"),
         processor.load_vocab_file("actions.txt", "how")
     ]):
         return
-
-    category = input("Enter category to filter (what/how) or press Enter for all: ").strip()
-    if category:
-        processor.set_category_filter(category)
-
+        
     print("Enter context (blank line to finish):")
     while pattern := input().strip():
         processor.add_syntax_pattern(pattern)
+        
+    category = input("Enter adjunct (what/how) or press Enter for all: ").strip()
+    if category:
+        processor.set_category_filter(category)
 
     results = processor.process_document()
     
     try:
+        # Save the analysis results
         with open('analysis_results.json', 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=2)
             print("Saved to 'analysis_results.json'")
+        
+        # Create new vocabulary files
+        processor.save_new_vocab_files(results)
+        
     except Exception as e:
         print(f"Error saving results: {e}")
 
