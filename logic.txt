@@ -1,0 +1,5 @@
+Looking at the answerstring and the language setup  of old code one can assume the logic is simple algebra. So a simple syntax data request and lingual binding.
+S → D
+L ↔ S
+D ≡ XOR 
+∀ → D
