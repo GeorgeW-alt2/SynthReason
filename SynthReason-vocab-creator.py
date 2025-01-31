@@ -156,10 +156,6 @@ def main():
     results = processor.process_document()
     
     try:
-        # Save the analysis results
-        with open('analysis_results.json', 'w', encoding='utf-8') as f:
-            json.dump(results, f, indent=2)
-            print("Saved to 'analysis_results.json'")
         
         # Create new vocabulary files
         processor.save_new_vocab_files(results)
