@@ -1,3 +1,4 @@
+
 import numpy as np
 import random
 import re
@@ -258,7 +259,15 @@ class ErrorAwareSemanticGenerator:
                     
                     available_words = []
                     word_weights = []
+                    # Select words within the chosen category
+                    for word, count in self.words[current_word][category].items():
+                        available_words.append(word)
+                        adjusted_weight = max(0.1, count * sigma_factor)  # Ensure non-zero weights
+                        word_weights.append(adjusted_weight)
                     
+                    if not available_words:
+                        continue
+                    current_word = random.choices(available_words, weights=word_weights)[0]
                     # Select words within the chosen category
                     for word, count in self.words[current_word][category].items():
                         available_words.append(word)
