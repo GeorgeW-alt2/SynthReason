@@ -43,7 +43,32 @@ class ErrorAwareSemanticGenerator:
         self.context_window = ContextWindow(context_size)
         self.context_size = context_size
         self.window_size = 20  # Size of window for rolling statistics
-
+    
+    def _is_valid_word(self, word: str) -> bool:
+        """
+        Validate if a word makes sense to include based on length and content.
+        """
+        # Common valid one-letter words
+        valid_one_letter = {'a', 'i'}
+        
+        # Common valid two-letter words
+        valid_two_letter = {
+            'am', 'an', 'as', 'at', 'be', 'by', 'do', 'go', 'he', 'hi',
+            'if', 'in', 'is', 'it', 'me', 'my', 'no', 'of', 'on', 'or',
+            'so', 'to', 'up', 'us', 'we'
+        }
+        
+        # Remove any punctuation for length checking
+        clean_word = word.strip('.,!?')
+        
+        # Filter based on word length
+        if len(clean_word) == 1:
+            return clean_word.lower() in valid_one_letter
+        elif len(clean_word) == 2:
+            return clean_word.lower() in valid_two_letter
+        
+        return True
+        
     def clean_text(self, text: str) -> str:
         text = re.sub(r'https?://\S+|www\.\S+', '', text)
         text = re.sub(r'\S+@\S+', '', text)
@@ -128,7 +153,7 @@ class ErrorAwareSemanticGenerator:
         
         while self.total_epochs < max_epochs and not self.is_converged:
             epoch_error = 0.0
-            epoch_errors_list = []  # Store all errors in epoch for variance calculation
+            epoch_errors_list = []
             num_samples = 0
             current_time = self.total_epochs
             
@@ -138,28 +163,27 @@ class ErrorAwareSemanticGenerator:
                 
                 for i, word in enumerate(words):
                     word = word.strip('.,!?')
-                    if not word:
+                    if not word or not self._is_valid_word(word):
                         continue
                         
-                    # Update context transitions
                     context = self.context_window.get_context()
                     if context and self.check_convergence():
                         self.context_transitions[context][word] += self.calculate_rolling_sigma()
                     
-                    # Regular word-based training with error tracking
                     category = self._categorize_word(word)
                     prev_word = words[i-1].strip('.,!?') if i > 0 else 'start'
+                    
+                    if i > 0 and not self._is_valid_word(prev_word):
+                        prev_word = 'start'
                     
                     self.memory_indices.append(i)
                     error_magnitude = self.calculate_rolling_sigma() if prev_word not in self.words else 0.5
                     self.error_magnitudes.append(error_magnitude)
                     
-                    # Calculate decayed error
                     decayed_error = error_magnitude * (self.decay_rate ** self.total_epochs)
                     self.error_history.append((decayed_error, current_time))
                     epoch_errors_list.append(decayed_error)
                     
-                    # Update running statistics
                     self.update_running_statistics(decayed_error)
                     
                     self.words[prev_word][category][word] += 1
@@ -168,11 +192,9 @@ class ErrorAwareSemanticGenerator:
                     epoch_error += decayed_error
                     num_samples += 1
             
-            # Calculate epoch statistics
             avg_epoch_error = epoch_error / num_samples if num_samples > 0 else 0
             epoch_errors.append(avg_epoch_error)
             
-            # Calculate epoch standard deviation
             if epoch_errors_list:
                 epoch_sigma = math.sqrt(sum((x - avg_epoch_error) ** 2 for x in epoch_errors_list) / len(epoch_errors_list))
             else:
@@ -193,13 +215,12 @@ class ErrorAwareSemanticGenerator:
         return epoch_errors
 
     def generate_text(self, num_words: int = 50) -> str:
-        
-            
         generated_words = []
         self.context_window.clear()
         
         input_text = input("Enter starting words (space-separated): ").lower().strip()
-        initial_words = [word.strip('.,!?') for word in input_text.split()]
+        initial_words = [word.strip('.,!?') for word in input_text.split() 
+                        if self._is_valid_word(word)]
         
         if not initial_words:
             initial_words = ['start']
@@ -211,7 +232,6 @@ class ErrorAwareSemanticGenerator:
         attempts = 0
         max_attempts = num_words * 2
         
-        # Calculate current sigma state for adaptive selection
         current_sigma = self.calculate_rolling_sigma()
         sigma_factor = 1.0 / (1.0 + current_sigma) if current_sigma != float('inf') else 0.5
         
@@ -221,70 +241,56 @@ class ErrorAwareSemanticGenerator:
                 
                 context = self.context_window.get_context()
                 if context in self.context_transitions and self.context_transitions[context]:
-                    candidates = list(self.context_transitions[context].items())
+                    candidates = [(word, count) for word, count in self.context_transitions[context].items() 
+                                if self._is_valid_word(word)]
                     if not candidates:
-                        raise ValueError("No candidates found in context transitions")
+                        raise ValueError("No valid candidates found in context transitions")
                     
                     words, counts = zip(*candidates)
                     if not words or not counts:
                         raise ValueError("Empty words or counts in context transitions")
                     
-                    # Adjust weights based on sigma stability
-                    adjusted_counts = [max(0.1, count * sigma_factor) for count in counts]  # Ensure non-zero weights
+                    adjusted_counts = [max(0.1, count * sigma_factor) for count in counts]
                     next_word = random.choices(words, weights=adjusted_counts)[0]
                 else:
                     if current_word not in self.words:
-                        # Fallback to a random previous word or 'start'
-                        current_word = random.choice(generated_words[-3:] if generated_words else ['start'])
+                        valid_words = [word for word in generated_words[-3:] 
+                                     if self._is_valid_word(word)]
+                        current_word = random.choice(valid_words if valid_words else ['start'])
                         continue
                     
                     categories = []
                     weights = []
                     
-                    # Calculate category weights with sigma consideration
                     for category, word_counts in self.words[current_word].items():
                         if word_counts:
                             total_count = sum(word_counts.values())
-                            adjusted_weight = max(0.1, total_count * sigma_factor)  # Ensure non-zero weights
+                            adjusted_weight = max(0.1, total_count * sigma_factor)
                             categories.append(category)
                             weights.append(adjusted_weight)
                     
                     if not categories:
-                        # Fallback to a random previous word or 'start'
-                        current_word = random.choice(generated_words[-3:] if generated_words else ['start'])
+                        current_word = random.choice([word for word in generated_words[-3:] 
+                                                   if self._is_valid_word(word)] or ['start'])
                         continue
                     
-                    # Apply stability-adjusted selection
                     category = random.choices(categories, weights=weights)[0]
                     
-                    available_words = []
-                    word_weights = []
-                    # Select words within the chosen category
-                    for word, count in self.words[current_word][category].items():
-                        available_words.append(word)
-                        adjusted_weight = max(0.1, count * sigma_factor)  # Ensure non-zero weights
-                        word_weights.append(adjusted_weight)
+                    valid_words = [(word, count) for word, count in self.words[current_word][category].items()
+                                 if self._is_valid_word(word)]
                     
-                    if not available_words:
+                    if not valid_words:
                         continue
-                    current_word = random.choices(available_words, weights=word_weights)[0]
-                    # Select words within the chosen category
-                    for word, count in self.words[current_word][category].items():
-                        available_words.append(word)
-                        adjusted_weight = max(0.1, count * sigma_factor)  # Ensure non-zero weights
-                        word_weights.append(adjusted_weight)
-                    
-                    if not available_words:
-                        continue
-                    
-                    next_word = random.choices(available_words, weights=word_weights)[0]
+                        
+                    words, counts = zip(*valid_words)
+                    adjusted_weights = [max(0.1, count * sigma_factor) for count in counts]
+                    next_word = random.choices(words, weights=adjusted_weights)[0]
                 
                 if next_word != (generated_words[-1] if generated_words else ''):
                     generated_words.append(next_word)
                     self.context_window.add(next_word)
                     current_word = next_word
                 
-                    # Update sigma factor periodically
                     if len(generated_words) % 10 == 0:
                         current_sigma = self.calculate_rolling_sigma()
                         sigma_factor = 1.0 / (1.0 + current_sigma) if current_sigma != float('inf') else 0.5
@@ -296,10 +302,10 @@ class ErrorAwareSemanticGenerator:
                         
             except Exception as e:
                 print(f"Warning: Error during generation ({str(e)}), continuing with fallback...")
-                current_word = random.choice(generated_words[-3:] if generated_words else ['start'])
+                valid_words = [word for word in generated_words[-3:] if self._is_valid_word(word)]
+                current_word = random.choice(valid_words if valid_words else ['start'])
                 continue
         
-        # Format the generated text
         text = ' '.join(generated_words)
         sentences = text.split('.')
         formatted_sentences = []
