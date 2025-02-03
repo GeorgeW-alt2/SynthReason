@@ -315,7 +315,7 @@ def main():
     generator = ErrorAwareSemanticGenerator(
         decay_rate=0.95,
         probability_threshold=0.01,
-        context_size=5
+        context_size=15
     )
     
     if not os.path.exists('models'):
