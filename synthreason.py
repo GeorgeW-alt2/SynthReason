@@ -1,4 +1,4 @@
-
+# SynthReason Version 4.0
 import numpy as np
 import random
 import re
@@ -11,7 +11,7 @@ from typing import List, Tuple, Dict, Any, Optional, Deque
 class ContextWindow:
     def __init__(self, size: int = 3):
         self.size = size
-        self.window: Deque[str] = deque(maxlen=size)
+        self.window = deque(maxlen=size)
     
     def add(self, word: str):
         self.window.append(word)
@@ -21,47 +21,34 @@ class ContextWindow:
             self.window.append(word)
     
     def get_context(self) -> str:
-        return ' '.join(self.window)
+        return ' '.join(list(self.window))
     
     def clear(self):
         self.window.clear()
 
 class ErrorAwareSemanticGenerator:
-    def __init__(self, decay_rate: float = 0.95, convergence_threshold: float = 1e-6, context_size: int = 5):
+    def __init__(self, decay_rate: float = 0.95, probability_threshold: float = 0.01, context_size: int = 5):
         self.words = defaultdict(lambda: defaultdict(Counter))
         self.context_transitions = defaultdict(Counter)
-        self.error_history: List[Tuple[float, int]] = []
-        self.memory_indices: List[int] = []
-        self.error_magnitudes: List[float] = []
-        self.sigma_history: List[float] = []  # Track standard deviations
-        self.running_mean: float = 0.0
-        self.running_variance: float = 0.0
+        self.transition_probabilities = defaultdict(dict)
+        self.prev_probabilities = defaultdict(dict)
         self.decay_rate = decay_rate
-        self.convergence_threshold = convergence_threshold
+        self.probability_threshold = probability_threshold
         self.is_converged = False
         self.total_epochs = 0
         self.context_window = ContextWindow(context_size)
         self.context_size = context_size
-        self.window_size = 20  # Size of window for rolling statistics
-    
-    def _is_valid_word(self, word: str) -> bool:
-        """
-        Validate if a word makes sense to include based on length and content.
-        """
-        # Common valid one-letter words
-        valid_one_letter = {'a', 'i'}
         
-        # Common valid two-letter words
-        valid_two_letter = {
+    def _is_valid_word(self, word: str) -> bool:
+        valid_one_letter = ['a', 'i']
+        valid_two_letter = [
             'am', 'an', 'as', 'at', 'be', 'by', 'do', 'go', 'he', 'hi',
             'if', 'in', 'is', 'it', 'me', 'my', 'no', 'of', 'on', 'or',
             'so', 'to', 'up', 'us', 'we'
-        }
+        ]
         
-        # Remove any punctuation for length checking
         clean_word = word.strip('.,!?')
         
-        # Filter based on word length
         if len(clean_word) == 1:
             return clean_word.lower() in valid_one_letter
         elif len(clean_word) == 2:
@@ -89,74 +76,58 @@ class ErrorAwareSemanticGenerator:
             return 'adverbs'
         elif word.endswith('ed') or word.endswith('ing'):
             return 'verbs'
-        elif word in {'the', 'a', 'an', 'this', 'that', 'these', 'those'}:
+        elif word in ['the', 'a', 'an', 'this', 'that', 'these', 'those']:
             return 'determiners'
-        elif word in {'in', 'on', 'at', 'to', 'from', 'with', 'without', 'by', 'near', 'far'}:
+        elif word in ['in', 'on', 'at', 'to', 'from', 'with', 'without', 'by', 'near', 'far']:
             return 'prepositions'
         else:
             return 'nouns'
 
-    def update_running_statistics(self, new_error: float) -> None:
-        """Update running mean and variance using Welford's online algorithm."""
-        n = len(self.error_history)
-        if n == 0:
-            self.running_mean = new_error
-            self.running_variance = 0.0
-        else:
-            old_mean = self.running_mean
-            self.running_mean += (new_error - old_mean) / (n + 1)
-            self.running_variance += (new_error - old_mean) * (new_error - self.running_mean)
-
-    def calculate_rolling_sigma(self) -> float:
-        """Calculate rolling standard deviation over recent errors."""
-        if len(self.error_history) < self.window_size:
-            return float('inf')
+    def _calculate_transition_probabilities(self):
+        """Calculate transition probabilities for all word pairs."""
+        self.prev_probabilities = self.transition_probabilities.copy()
+        self.transition_probabilities.clear()
         
-        recent_errors = [error for error, _ in self.error_history[-self.window_size:]]
-        mean = sum(recent_errors) / len(recent_errors)
-        variance = sum((x - mean) ** 2 for x in recent_errors) / len(recent_errors)
-        return math.sqrt(variance)
+        for prev_word, categories in self.words.items():
+            total_transitions = sum(sum(counter.values()) for counter in categories.values())
+            
+            if total_transitions > 0:
+                for category, counter in categories.items():
+                    for word, count in counter.items():
+                        prob = count / total_transitions
+                        if prev_word not in self.transition_probabilities:
+                            self.transition_probabilities[prev_word] = {}
+                        self.transition_probabilities[prev_word][word] = prob
 
-    def check_convergence(self) -> bool:
-        if len(self.error_history) < self.window_size:
+    def _compare_probabilities(self) -> bool:
+        """Compare current and previous transition probabilities."""
+        if not self.prev_probabilities:
             return False
             
-        # Calculate rolling statistics
-        sigma = self.calculate_rolling_sigma()
-        self.sigma_history.append(sigma)
+        total_diff = 0
+        count = 0
         
-        # Check both absolute error and stability
-        recent_errors = [error for error, _ in self.error_history[-self.window_size:]]
-        error_mean = sum(recent_errors) / len(recent_errors)
+        for prev_word, transitions in self.transition_probabilities.items():
+            if prev_word in self.prev_probabilities:
+                for word, prob in transitions.items():
+                    if word in self.prev_probabilities[prev_word]:
+                        diff = abs(prob - self.prev_probabilities[prev_word][word])
+                        total_diff += diff
+                        count += 1
         
-        # Criteria for convergence:
-        # 1. Mean error below threshold
-        # 2. Standard deviation stable and small
-        error_stable = sigma < self.convergence_threshold
-        mean_acceptable = error_mean < self.convergence_threshold * 2
-        
-        # Check trend in standard deviation
-        sigma_stable = False
-        if len(self.sigma_history) >= 3:
-            recent_sigmas = self.sigma_history[-3:]
-            sigma_changes = [abs(recent_sigmas[i] - recent_sigmas[i-1]) 
-                           for i in range(1, len(recent_sigmas))]
-            sigma_stable = all(change < self.convergence_threshold/2 for change in sigma_changes)
-        
-        return sigma_stable
+        if count == 0:
+            return False
+            
+        avg_diff = total_diff / count
+        return avg_diff < self.probability_threshold
 
-    def train_until_convergence(self, text: str, max_epochs: int = 100) -> List[float]:
-        """Train the model until convergence or maximum epochs reached."""
+    def train_until_convergence(self, text: str, max_epochs: int = 10) -> List[float]:
+        """Train the model until transition probabilities converge."""
         text = self.clean_text(text)
         sentences = text.split('.')
-        epoch_errors = []
+        epoch_diffs = []
         
-        while self.total_epochs < max_epochs and not self.is_converged:
-            epoch_error = 0.0
-            epoch_errors_list = []
-            num_samples = 0
-            current_time = self.total_epochs
-            
+        while self.total_epochs < max_epochs:
             for sentence in sentences:
                 words = sentence.lower().split()
                 self.context_window.clear()
@@ -165,56 +136,35 @@ class ErrorAwareSemanticGenerator:
                     word = word.strip('.,!?')
                     if not word or not self._is_valid_word(word):
                         continue
-                        
-                    context = self.context_window.get_context()
-                    if context and self.check_convergence():
-                        self.context_transitions[context][word] += self.calculate_rolling_sigma()
+                    if self.is_converged:    
+                        context = self.context_window.get_context()
+                        if context:
+                            self.context_transitions[context][word] += 1
                     
-                    category = self._categorize_word(word)
                     prev_word = words[i-1].strip('.,!?') if i > 0 else 'start'
-                    
+                    category = ()
+                    if word in self.prev_probabilities[prev_word]:
+                        category = abs(i - self.prev_probabilities[prev_word][word])
+
                     if i > 0 and not self._is_valid_word(prev_word):
                         prev_word = 'start'
                     
-                    self.memory_indices.append(i)
-                    error_magnitude = self.calculate_rolling_sigma() if prev_word not in self.words else 0.5
-                    self.error_magnitudes.append(error_magnitude)
-                    
-                    decayed_error = error_magnitude * (self.decay_rate ** self.total_epochs)
-                    self.error_history.append((decayed_error, current_time))
-                    epoch_errors_list.append(decayed_error)
-                    
-                    self.update_running_statistics(decayed_error)
-                    
                     self.words[prev_word][category][word] += 1
                     self.context_window.add(word)
-                    
-                    epoch_error += decayed_error
-                    num_samples += 1
-            
-            avg_epoch_error = epoch_error / num_samples if num_samples > 0 else 0
-            epoch_errors.append(avg_epoch_error)
-            
-            if epoch_errors_list:
-                epoch_sigma = math.sqrt(sum((x - avg_epoch_error) ** 2 for x in epoch_errors_list) / len(epoch_errors_list))
-            else:
-                epoch_sigma = 0.0
-                
-            self.is_converged = self.check_convergence()
+            if self._compare_probabilities():
+                self._calculate_transition_probabilities()
+            self.is_converged = self._compare_probabilities()
             self.total_epochs += 1
             
             if self.total_epochs % 10 == 0:
-                print(f"Epoch {self.total_epochs}:")
-                print(f"  Average Error = {avg_epoch_error:.6f}")
-                print(f"  Sigma = {epoch_sigma:.6f}")
-                print(f"  Rolling Sigma = {self.calculate_rolling_sigma():.6f}")
+                print(f"Epoch {self.total_epochs}")
                 
         print(f"\nTraining completed after {self.total_epochs} epochs")
         print(f"Converged: {self.is_converged}")
-        print(f"Final Rolling Sigma: {self.calculate_rolling_sigma():.6f}")
-        return epoch_errors
+        return epoch_diffs
 
     def generate_text(self, num_words: int = 50) -> str:
+        """Generate text based on learned probabilities."""
         generated_words = []
         self.context_window.clear()
         
@@ -232,79 +182,61 @@ class ErrorAwareSemanticGenerator:
         attempts = 0
         max_attempts = num_words * 2
         
-        current_sigma = self.calculate_rolling_sigma()
-        sigma_factor = 1.0 / (1.0 + current_sigma) if current_sigma != float('inf') else 0.5
-        
         while len(generated_words) < num_words and attempts < max_attempts:
-            try:
-                attempts += 1
-                
-                context = self.context_window.get_context()
-                if context in self.context_transitions and self.context_transitions[context]:
-                    candidates = [(word, count) for word, count in self.context_transitions[context].items() 
-                                if self._is_valid_word(word)]
-                    if not candidates:
-                        raise ValueError("No valid candidates found in context transitions")
-                    
+            attempts += 1
+            
+            context = self.context_window.get_context()
+            if context in self.context_transitions and self.context_transitions[context]:
+                # Use context-based transitions
+                candidates = [(word, count) for word, count in self.context_transitions[context].items() 
+                            if self._is_valid_word(word)]
+                if candidates:
                     words, counts = zip(*candidates)
-                    if not words or not counts:
-                        raise ValueError("Empty words or counts in context transitions")
-                    
-                    adjusted_counts = [max(0.1, count * sigma_factor) for count in counts]
-                    next_word = random.choices(words, weights=adjusted_counts)[0]
+                    next_word = random.choices(words, weights=counts)[0]
                 else:
-                    if current_word not in self.words:
-                        valid_words = [word for word in generated_words[-3:] 
-                                     if self._is_valid_word(word)]
-                        current_word = random.choice(valid_words if valid_words else ['start'])
-                        continue
-                    
-                    categories = []
-                    weights = []
-                    
-                    for category, word_counts in self.words[current_word].items():
-                        if word_counts:
-                            total_count = sum(word_counts.values())
-                            adjusted_weight = max(0.1, total_count * sigma_factor)
-                            categories.append(category)
-                            weights.append(adjusted_weight)
-                    
-                    if not categories:
-                        current_word = random.choice([word for word in generated_words[-3:] 
-                                                   if self._is_valid_word(word)] or ['start'])
-                        continue
-                    
-                    category = random.choices(categories, weights=weights)[0]
-                    
-                    valid_words = [(word, count) for word, count in self.words[current_word][category].items()
+                    continue
+            else:
+                # Use word-based transitions
+                if current_word not in self.words:
+                    valid_words = [word for word in generated_words[-3:] 
                                  if self._is_valid_word(word)]
+                    current_word = random.choice(valid_words if valid_words else ['start'])
+                    continue
+                
+                categories = []
+                weights = []
+                
+                for category, word_counts in self.words[current_word].items():
+                    if word_counts:
+                        total_count = sum(word_counts.values())
+                        categories.append(category)
+                        weights.append(total_count)
+                
+                if not categories:
+                    current_word = random.choice([word for word in generated_words[-3:] 
+                                               if self._is_valid_word(word)] or ['start'])
+                    continue
+                
+                category = random.choices(categories, weights=weights)[0]
+                
+                valid_words = [(word, count) for word, count in self.words[current_word][category].items()
+                             if self._is_valid_word(word)]
+                
+                if not valid_words:
+                    continue
                     
-                    if not valid_words:
-                        continue
-                        
-                    words, counts = zip(*valid_words)
-                    adjusted_weights = [max(0.1, count * sigma_factor) for count in counts]
-                    next_word = random.choices(words, weights=adjusted_weights)[0]
-                
-                if next_word != (generated_words[-1] if generated_words else ''):
-                    generated_words.append(next_word)
-                    self.context_window.add(next_word)
-                    current_word = next_word
-                
-                    if len(generated_words) % 10 == 0:
-                        current_sigma = self.calculate_rolling_sigma()
-                        sigma_factor = 1.0 / (1.0 + current_sigma) if current_sigma != float('inf') else 0.5
-                
+                words, counts = zip(*valid_words)
+                next_word = random.choices(words, weights=counts)[0]
+            
+            if next_word != (generated_words[-1] if generated_words else ''):
+                generated_words.append(next_word)
+                self.context_window.add(next_word)
+                current_word = next_word
+            
                 if next_word.endswith('.'):
                     self.context_window.clear()
                     if len(generated_words) < num_words:
                         self.context_window.add_multiple(generated_words[-min(3, len(generated_words)):])
-                        
-            except Exception as e:
-                print(f"Warning: Error during generation ({str(e)}), continuing with fallback...")
-                valid_words = [word for word in generated_words[-3:] if self._is_valid_word(word)]
-                current_word = random.choice(valid_words if valid_words else ['start'])
-                continue
         
         text = ' '.join(generated_words)
         sentences = text.split('.')
@@ -319,6 +251,7 @@ class ErrorAwareSemanticGenerator:
         return ' '.join(formatted_sentences)
 
     def save_model(self, filepath: str):
+        """Save the model state to a file."""
         try:
             model_state = {
                 'words': {
@@ -332,18 +265,13 @@ class ErrorAwareSemanticGenerator:
                     context: dict(transitions)
                     for context, transitions in self.context_transitions.items()
                 },
-                'error_history': self.error_history,
-                'memory_indices': self.memory_indices,
-                'error_magnitudes': self.error_magnitudes,
-                'sigma_history': self.sigma_history,
-                'running_mean': self.running_mean,
-                'running_variance': self.running_variance,
+                'transition_probabilities': dict(self.transition_probabilities),
+                'prev_probabilities': dict(self.prev_probabilities),
                 'decay_rate': self.decay_rate,
-                'convergence_threshold': self.convergence_threshold,
+                'probability_threshold': self.probability_threshold,
                 'is_converged': self.is_converged,
                 'total_epochs': self.total_epochs,
-                'context_size': self.context_size,
-                'window_size': self.window_size
+                'context_size': self.context_size
             }
             
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -354,6 +282,7 @@ class ErrorAwareSemanticGenerator:
             raise Exception(f"Failed to save model: {str(e)}")
 
     def load_model(self, filepath: str):
+        """Load the model state from a file."""
         try:
             with open(filepath, 'rb') as f:
                 model_state = pickle.load(f)
@@ -367,32 +296,26 @@ class ErrorAwareSemanticGenerator:
             for context, transitions in model_state['context_transitions'].items():
                 self.context_transitions[context].update(transitions)
             
-            self.error_history = model_state['error_history']
-            self.memory_indices = model_state['memory_indices']
-            self.error_magnitudes = model_state['error_magnitudes']
-            self.sigma_history = model_state.get('sigma_history', [])
-            self.running_mean = model_state.get('running_mean', 0.0)
-            self.running_variance = model_state.get('running_variance', 0.0)
+            self.transition_probabilities = defaultdict(dict, model_state['transition_probabilities'])
+            self.prev_probabilities = defaultdict(dict, model_state['prev_probabilities'])
             self.decay_rate = model_state['decay_rate']
-            self.convergence_threshold = model_state['convergence_threshold']
+            self.probability_threshold = model_state['probability_threshold']
             self.is_converged = model_state['is_converged']
             self.total_epochs = model_state['total_epochs']
-            self.context_size = model_state.get('context_size', 5)
-            self.window_size = model_state.get('window_size', 10)
-            
+            self.context_size = model_state['context_size']
             self.context_window = ContextWindow(self.context_size)
             
         except Exception as e:
             raise Exception(f"Failed to load model: {str(e)}")
 
 def main():
-    print("Multi-Word Context-Aware Semantic Text Generator")
-    print("=============================================")
+    print("Probability-Based Context-Aware Semantic Text Generator")
+    print("================================================")
     
     generator = ErrorAwareSemanticGenerator(
-        decay_rate=0.25,
-        convergence_threshold=1e-6,
-        context_size=15
+        decay_rate=0.95,
+        probability_threshold=0.01,
+        context_size=5
     )
     
     if not os.path.exists('models'):
@@ -414,8 +337,7 @@ def main():
                 with open(filename, 'r', encoding='utf-8') as f:
                     text = f.read()
                 print("\nTraining model...")
-                errors = generator.train_until_convergence(text)
-                print(f"Final error: {errors[-1]:.6f}")
+                generator.train_until_convergence(text)
                 
                 model_path = os.path.join('models', 'auto_saved_model.pkl')
                 generator.save_model(model_path)
@@ -426,17 +348,12 @@ def main():
                 print(f"Error during training: {e}")
                 
         elif choice == "2":
-            if not generator.is_converged:
-                print("Warning: Model not trained or loaded. Results may be unreliable.")
-            try:
-                num_words = 500
-                while True:
-                    generated_text = generator.generate_text(num_words)
-                    print("\nGenerated text:")
-                    print(generated_text)
-                    
-            except ValueError as e:
-                print(f"Error: {e}")
+            while True:
+                num_words = 250
+                generated_text = generator.generate_text(num_words)
+                print("\nGenerated text:")
+                print(generated_text)
+       
                 
         elif choice == "3":
             try:
