@@ -1,4 +1,4 @@
-# SynthReason Version 4.0
+# SynthReason Version 5.0
 import numpy as np
 import random
 import re
@@ -7,24 +7,50 @@ import math
 import os
 from collections import defaultdict, Counter, deque
 from typing import List, Tuple, Dict, Any, Optional, Deque
-
 class ContextWindow:
-    def __init__(self, size: int = 3):
-        self.size = size
-        self.window = deque(maxlen=size)
-    
+    def __init__(self, block_size: int, num_blocks: int):
+        self.block_size = block_size
+        self.num_blocks = num_blocks
+        # Initialize the window as a list of lists (blocks)
+        self.window = [[''] * block_size for _ in range(num_blocks)]
+        self.current_block = 0
+        self.current_index_in_block = 0
+
     def add(self, word: str):
-        self.window.append(word)
-    
-    def add_multiple(self, words: List[str]):
-        for word in words[-self.size:]:
-            self.window.append(word)
-    
+        # Ensure that the current block and index are within bounds
+        if self.current_block >= len(self.window):
+            print(f"Error: current_block {self.current_block} exceeds window size.")
+            return
+        if self.current_index_in_block >= self.block_size:
+            print(f"Error: current_index_in_block {self.current_index_in_block} exceeds block size.")
+            return
+
+        # Add the word at the current position in the current block
+        self.window[self.current_block][self.current_index_in_block] = word
+
+        # Update the current index in the block
+        self.current_index_in_block += 1
+
+        # Check if we need to move to the next block
+        if self.current_index_in_block == self.block_size:
+            self.current_index_in_block = 0
+            self.current_block = (self.current_block + 1) % self.num_blocks  # Move to the next block, wrap around
+
+    def add_multiple(self, words: list):
+        # Add multiple words, managing the hierarchy as necessary
+        for word in words:
+            self.add(word)
+
     def get_context(self) -> str:
-        return ' '.join(list(self.window))
-    
+        # Flatten the entire context window and join the words as a string
+        flat_window = [word for block in self.window for word in block if word is not None]
+        return ' '.join(flat_window)
+
     def clear(self):
-        self.window.clear()
+        # Clear all blocks and reset indices
+        self.window = [[None] * self.block_size for _ in range(self.num_blocks)]
+        self.current_block = 0
+        self.current_index_in_block = 0
 
 class ErrorAwareSemanticGenerator:
     def __init__(self, decay_rate: float = 0.95, probability_threshold: float = 0.01, context_size: int = 5):
@@ -36,8 +62,9 @@ class ErrorAwareSemanticGenerator:
         self.probability_threshold = probability_threshold
         self.is_converged = False
         self.total_epochs = 0
-        self.context_window = ContextWindow(context_size)
-        self.context_size = context_size
+        self.context_window =  ContextWindow(block_size=10, num_blocks=5)
+
+        self.context_size = 40,000
         
     def _is_valid_word(self, word: str) -> bool:
         valid_one_letter = ['a', 'i']
@@ -332,20 +359,17 @@ def main():
         choice = input("\nEnter your choice (1-5): ").strip()
         
         if choice == "1":
-            try:
-                filename = input("Enter filename: ")
-                with open(filename, 'r', encoding='utf-8') as f:
-                    text = f.read()
-                print("\nTraining model...")
-                generator.train_until_convergence(text)
-                
-                model_path = os.path.join('models', 'auto_saved_model.pkl')
-                generator.save_model(model_path)
-                print(f"Model automatically saved to {model_path}")
-            except FileNotFoundError:
-                print("Error: Training file not found!")
-            except Exception as e:
-                print(f"Error during training: {e}")
+
+            filename = input("Enter filename: ")
+            with open(filename, 'r', encoding='utf-8') as f:
+                text = f.read()
+            print("\nTraining model...")
+            generator.train_until_convergence(text)
+            
+            model_path = os.path.join('models', 'auto_saved_model.pkl')
+            generator.save_model(model_path)
+            print(f"Model automatically saved to {model_path}")
+        
                 
         elif choice == "2":
             while True:
