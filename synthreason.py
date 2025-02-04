@@ -1,4 +1,3 @@
-# SynthReason Version 5.0
 import numpy as np
 import random
 import re
@@ -360,6 +359,43 @@ class ErrorAwareSemanticGenerator:
                 formatted_sentences.append(formatted)
         
         return ' '.join(formatted_sentences)
+    
+    def save_model(self, filename: str):
+        """Save the model to a file."""
+        with open(filename, 'wb') as f:
+            pickle.dump({
+                'words': self.words,
+                'context_transitions': self.context_transitions,
+                'transition_probabilities': self.transition_probabilities,
+                'prev_probabilities': self.prev_probabilities,
+                'decay_rate': self.decay_rate,
+                'probability_threshold': self.probability_threshold,
+                'is_converged': self.is_converged,
+                'total_epochs': self.total_epochs,
+                'context_size': self.context_size,
+                'context_window': self.context_window,
+                'layer_transitions': self.layer_transitions,
+                'semantic_categories': self.semantic_categories
+            }, f)
+        print(f"Model saved to {filename}")
+
+    def load_model(self, filename: str):
+        """Load the model from a file."""
+        with open(filename, 'rb') as f:
+            data = pickle.load(f)
+            self.words = data['words']
+            self.context_transitions = data['context_transitions']
+            self.transition_probabilities = data['transition_probabilities']
+            self.prev_probabilities = data['prev_probabilities']
+            self.decay_rate = data['decay_rate']
+            self.probability_threshold = data['probability_threshold']
+            self.is_converged = data['is_converged']
+            self.total_epochs = data['total_epochs']
+            self.context_size = data['context_size']
+            self.context_window = data['context_window']
+            self.layer_transitions = data['layer_transitions']
+            self.semantic_categories = data['semantic_categories']
+        print(f"Model loaded from {filename}")
 
 def main():
     print("Probability-Based Context-Aware Semantic Text Generator")
@@ -378,19 +414,19 @@ def main():
         print("\nOptions:")
         print("1. Train model")
         print("2. Generate text")
-        print("3. Exit")
+        print("3. Save model")
+        print("4. Load model")
+        print("5. Exit")
         
-        choice = input("\nEnter your choice (1-3): ").strip()
+        choice = input("\nEnter your choice (1-5): ").strip()
         
         if choice == "1":
-
             filename = input("Enter filename: ")
             with open(filename, 'r', encoding='utf-8') as f:
                 text = ' '.join(f.read().split()[:KB_limit])
             print("\nTraining model...")
             generator.train_until_convergence(text)
         
-                
         elif choice == "2":
             while True:
                 num_words = 250
@@ -398,8 +434,15 @@ def main():
                 print("\nGenerated text:")
                 print(generated_text)
        
-                
         elif choice == "3":
+            filename = input("Enter filename to save the model: ").strip()
+            generator.save_model(filename)
+        
+        elif choice == "4":
+            filename = input("Enter filename to load the model: ").strip()
+            generator.load_model(filename)
+        
+        elif choice == "5":
             print("Goodbye!")
             break
             
