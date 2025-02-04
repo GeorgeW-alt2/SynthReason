@@ -1,0 +1,1 @@
+100,000 GPUs with 80GB RAM for ~8MB of tokens and a 470GB dataset so, 8! implies the model isn't 1 dimensional it is rather 40,320 dimensions, or 40,320 different response patterns and I would suppose there is a hierarchy involved x/8 with 5,040 different instructions yet that is too large for human oversight so x/8 again is 630 human generated instructions.
