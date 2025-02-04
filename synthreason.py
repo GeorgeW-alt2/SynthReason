@@ -7,50 +7,101 @@ import math
 import os
 from collections import defaultdict, Counter, deque
 from typing import List, Tuple, Dict, Any, Optional, Deque
+
+KB_limit = 9999 # -1 for unlimited
 class ContextWindow:
-    def __init__(self, block_size: int, num_blocks: int):
+    def __init__(self, block_size: int, num_blocks: int, num_layers: int = 3, layer_depth: int = 2):
         self.block_size = block_size
         self.num_blocks = num_blocks
-        # Initialize the window as a list of lists (blocks)
-        self.window = [[''] * block_size for _ in range(num_blocks)]
-        self.current_block = 0
-        self.current_index_in_block = 0
+        self.num_layers = num_layers
+        self.layer_depth = layer_depth
+        
+        # Initialize 3D window structure: [layers][blocks][words]
+        self.window = [[[''] * block_size for _ in range(num_blocks)] for _ in range(num_layers)]
+        
+        # Tracking current position in each layer
+        self.current_positions = [(0, 0) for _ in range(num_layers)]  # (block, index)
+        
+        # Track semantic relationships between layers
+        self.layer_connections = defaultdict(lambda: defaultdict(float))
 
-    def add(self, word: str):
-        # Ensure that the current block and index are within bounds
-        if self.current_block >= len(self.window):
-            print(f"Error: current_block {self.current_block} exceeds window size.")
+    def add(self, word: str, layer: int = 0):
+        if not (0 <= layer < self.num_layers):
+            print(f"Error: layer {layer} out of bounds.")
             return
-        if self.current_index_in_block >= self.block_size:
-            print(f"Error: current_index_in_block {self.current_index_in_block} exceeds block size.")
-            return
+            
+        current_block, current_index = self.current_positions[layer]
+        
+        # Add word to current position
+        self.window[layer][current_block][current_index] = word
+        
+        # Update position
+        current_index += 1
+        if current_index >= self.block_size:
+            current_index = 0
+            current_block = (current_block + 1) % self.num_blocks
+            
+        self.current_positions[layer] = (current_block, current_index)
+        
+        # Propagate to higher layers based on semantic relationships
+        if layer < self.num_layers - 1:
+            self._propagate_to_higher_layers(word, layer)
 
-        # Add the word at the current position in the current block
-        self.window[self.current_block][self.current_index_in_block] = word
+    def _propagate_to_higher_layers(self, word: str, current_layer: int):
+        for higher_layer in range(current_layer + 1, min(current_layer + self.layer_depth, self.num_layers)):
+            connection_strength = self.layer_connections[current_layer][higher_layer]
+            if connection_strength > 0.5:  # Threshold for propagation
+                self.add(word, higher_layer)
 
-        # Update the current index in the block
-        self.current_index_in_block += 1
-
-        # Check if we need to move to the next block
-        if self.current_index_in_block == self.block_size:
-            self.current_index_in_block = 0
-            self.current_block = (self.current_block + 1) % self.num_blocks  # Move to the next block, wrap around
-
-    def add_multiple(self, words: list):
-        # Add multiple words, managing the hierarchy as necessary
+    def add_multiple(self, words: list, layer: int = 0):
         for word in words:
-            self.add(word)
+            self.add(word, layer)
 
-    def get_context(self) -> str:
-        # Flatten the entire context window and join the words as a string
-        flat_window = [word for block in self.window for word in block if word is not None]
-        return ' '.join(flat_window)
+    def get_context(self, layer: int = None) -> str:
+        if layer is not None:
+            if not (0 <= layer < self.num_layers):
+                return ""
+            flat_layer = [word for block in self.window[layer] for word in block if word]
+            return ' '.join(flat_layer)
+        
+        # Combine context from all layers with decreasing weight
+        contexts = []
+        for l in range(self.num_layers):
+            layer_context = self.get_context(l)
+            if layer_context:
+                weight = 1.0 / (l + 1)  # Higher layers have less weight
+                contexts.append((layer_context, weight))
+        
+        return ' '.join(context for context, _ in contexts)
 
-    def clear(self):
-        # Clear all blocks and reset indices
-        self.window = [[None] * self.block_size for _ in range(self.num_blocks)]
-        self.current_block = 0
-        self.current_index_in_block = 0
+    def get_layer_context(self, start_layer: int, depth: int) -> str:
+        if not (0 <= start_layer < self.num_layers):
+            return ""
+            
+        max_depth = min(depth, self.num_layers - start_layer)
+        contexts = []
+        
+        for l in range(start_layer, start_layer + max_depth):
+            layer_context = self.get_context(l)
+            if layer_context:
+                contexts.append(layer_context)
+                
+        return ' '.join(contexts)
+
+    def clear(self, layer: int = None):
+        if layer is not None:
+            if 0 <= layer < self.num_layers:
+                self.window[layer] = [[''] * self.block_size for _ in range(self.num_blocks)]
+                self.current_positions[layer] = (0, 0)
+            return
+            
+        self.window = [[[''] * self.block_size for _ in range(self.num_blocks)] for _ in range(self.num_layers)]
+        self.current_positions = [(0, 0) for _ in range(self.num_layers)]
+        self.layer_connections.clear()
+
+    def update_layer_connection(self, layer1: int, layer2: int, strength: float):
+        if 0 <= layer1 < self.num_layers and 0 <= layer2 < self.num_layers:
+            self.layer_connections[layer1][layer2] = max(0.0, min(1.0, strength))
 
 class ErrorAwareSemanticGenerator:
     def __init__(self, decay_rate: float = 0.95, probability_threshold: float = 0.01, context_size: int = 5):
@@ -62,9 +113,42 @@ class ErrorAwareSemanticGenerator:
         self.probability_threshold = probability_threshold
         self.is_converged = False
         self.total_epochs = 0
-        self.context_window =  ContextWindow(block_size=10, num_blocks=5)
-
-        self.context_size = 40,000
+        self.context_size = context_size
+        
+        # Enhanced context window initialization
+        self.context_window = ContextWindow(
+            block_size=1000,
+            num_blocks=150,
+            num_layers=7,
+            layer_depth=3
+        )
+        
+        # Layer-specific transition tracking
+        self.layer_transitions = [defaultdict(Counter) for _ in range(3)]
+        self.semantic_categories = defaultdict(str)
+    
+    def _calculate_semantic_connection(self, category1: str, category2: str) -> float:
+        # Define semantic relationship strengths between categories
+        relationship_matrix = {
+            ('verbs', 'adverbs'): 0.8,
+            ('determiners', 'nouns'): 0.7,
+            ('prepositions', 'nouns'): 0.6
+        }
+        
+        return relationship_matrix.get((category1, category2), 0.3)
+        
+    def _format_generated_text(self, words: List[str]) -> str:
+        text = ' '.join(words)
+        sentences = text.split('.')
+        formatted_sentences = []
+        
+        for sentence in sentences:
+            if sentence.strip():
+                formatted = sentence.strip()
+                formatted = formatted[0].upper() + formatted[1:] + '.'
+                formatted_sentences.append(formatted)
+        
+        return ' '.join(formatted_sentences)
         
     def _is_valid_word(self, word: str) -> bool:
         valid_one_letter = ['a', 'i']
@@ -277,71 +361,13 @@ class ErrorAwareSemanticGenerator:
         
         return ' '.join(formatted_sentences)
 
-    def save_model(self, filepath: str):
-        """Save the model state to a file."""
-        try:
-            model_state = {
-                'words': {
-                    context: {
-                        category: dict(counter)
-                        for category, counter in categories.items()
-                    }
-                    for context, categories in self.words.items()
-                },
-                'context_transitions': {
-                    context: dict(transitions)
-                    for context, transitions in self.context_transitions.items()
-                },
-                'transition_probabilities': dict(self.transition_probabilities),
-                'prev_probabilities': dict(self.prev_probabilities),
-                'decay_rate': self.decay_rate,
-                'probability_threshold': self.probability_threshold,
-                'is_converged': self.is_converged,
-                'total_epochs': self.total_epochs,
-                'context_size': self.context_size
-            }
-            
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            with open(filepath, 'wb') as f:
-                pickle.dump(model_state, f)
-            
-        except Exception as e:
-            raise Exception(f"Failed to save model: {str(e)}")
-
-    def load_model(self, filepath: str):
-        """Load the model state from a file."""
-        try:
-            with open(filepath, 'rb') as f:
-                model_state = pickle.load(f)
-            
-            self.words = defaultdict(lambda: defaultdict(Counter))
-            for context, categories in model_state['words'].items():
-                for category, words in categories.items():
-                    self.words[context][category].update(words)
-            
-            self.context_transitions = defaultdict(Counter)
-            for context, transitions in model_state['context_transitions'].items():
-                self.context_transitions[context].update(transitions)
-            
-            self.transition_probabilities = defaultdict(dict, model_state['transition_probabilities'])
-            self.prev_probabilities = defaultdict(dict, model_state['prev_probabilities'])
-            self.decay_rate = model_state['decay_rate']
-            self.probability_threshold = model_state['probability_threshold']
-            self.is_converged = model_state['is_converged']
-            self.total_epochs = model_state['total_epochs']
-            self.context_size = model_state['context_size']
-            self.context_window = ContextWindow(self.context_size)
-            
-        except Exception as e:
-            raise Exception(f"Failed to load model: {str(e)}")
-
 def main():
     print("Probability-Based Context-Aware Semantic Text Generator")
     print("================================================")
     
     generator = ErrorAwareSemanticGenerator(
         decay_rate=0.95,
-        probability_threshold=0.01,
+        probability_threshold=0.51,
         context_size=15
     )
     
@@ -352,23 +378,17 @@ def main():
         print("\nOptions:")
         print("1. Train model")
         print("2. Generate text")
-        print("3. Save model")
-        print("4. Load model")
-        print("5. Exit")
+        print("3. Exit")
         
-        choice = input("\nEnter your choice (1-5): ").strip()
+        choice = input("\nEnter your choice (1-3): ").strip()
         
         if choice == "1":
 
             filename = input("Enter filename: ")
             with open(filename, 'r', encoding='utf-8') as f:
-                text = f.read()
+                text = ' '.join(f.read().split()[:KB_limit])
             print("\nTraining model...")
             generator.train_until_convergence(text)
-            
-            model_path = os.path.join('models', 'auto_saved_model.pkl')
-            generator.save_model(model_path)
-            print(f"Model automatically saved to {model_path}")
         
                 
         elif choice == "2":
@@ -380,44 +400,6 @@ def main():
        
                 
         elif choice == "3":
-            try:
-                model_name = input("Enter model name to save (will be saved in 'models' directory): ")
-                if not model_name.endswith('.pkl'):
-                    model_name += '.pkl'
-                model_path = os.path.join('models', model_name)
-                
-                generator.save_model(model_path)
-                print(f"Model saved successfully to {model_path}")
-            except Exception as e:
-                print(f"Error saving model: {e}")
-                
-        elif choice == "4":
-            try:
-                models = [f for f in os.listdir('models') if f.endswith('.pkl')]
-                if not models:
-                    print("No saved models found in 'models' directory.")
-                    continue
-                    
-                print("\nAvailable models:")
-                for i, model in enumerate(models, 1):
-                    print(f"{i}. {model}")
-                
-                choice = input("\nEnter model number to load (or filename): ").strip()
-                
-                if choice.isdigit() and 1 <= int(choice) <= len(models):
-                    model_name = models[int(choice) - 1]
-                else:
-                    model_name = choice if choice.endswith('.pkl') else choice + '.pkl'
-                
-                model_path = os.path.join('models', model_name)
-                generator.load_model(model_path)
-                print(f"Model loaded successfully from {model_path}")
-            except FileNotFoundError:
-                print("Error: Model file not found!")
-            except Exception as e:
-                print(f"Error loading model: {e}")
-                
-        elif choice == "5":
             print("Goodbye!")
             break
             
