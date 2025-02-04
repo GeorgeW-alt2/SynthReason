@@ -457,13 +457,8 @@ def main():
                 
         elif choice == "2":
             try:
-                num_words = int(input("Enter number of words to generate (default 250): ") or 250)
+                num_words = 250
                 generated_text = generator.generate_text(num_words)
-                print("\nGenerated text:")
-                print(generated_text)
-            except ValueError:
-                print("Invalid number. Using default 250 words.")
-                generated_text = generator.generate_text(250)
                 print("\nGenerated text:")
                 print(generated_text)
             except Exception as e:
