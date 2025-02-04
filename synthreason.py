@@ -1,3 +1,4 @@
+# SynthReason Version 5.0
 import numpy as np
 import random
 import re
@@ -359,54 +360,76 @@ class ErrorAwareSemanticGenerator:
                 formatted_sentences.append(formatted)
         
         return ' '.join(formatted_sentences)
+        
+def save_model(generator, filename):
+    """Save the model state to a file."""
+    model_state = {
+        'words': dict(generator.words),
+        'context_transitions': dict(generator.context_transitions),
+        'transition_probabilities': dict(generator.transition_probabilities),
+        'prev_probabilities': dict(generator.prev_probabilities),
+        'total_epochs': generator.total_epochs,
+        'is_converged': generator.is_converged,
+        'layer_transitions': [dict(lt) for lt in generator.layer_transitions],
+        'semantic_categories': dict(generator.semantic_categories)
+    }
     
-    def save_model(self, filename: str):
-        """Save the model to a file."""
-        with open(filename, 'wb') as f:
-            pickle.dump({
-                'words': self.words,
-                'context_transitions': self.context_transitions,
-                'transition_probabilities': self.transition_probabilities,
-                'prev_probabilities': self.prev_probabilities,
-                'decay_rate': self.decay_rate,
-                'probability_threshold': self.probability_threshold,
-                'is_converged': self.is_converged,
-                'total_epochs': self.total_epochs,
-                'context_size': self.context_size,
-                'context_window': self.context_window,
-                'layer_transitions': self.layer_transitions,
-                'semantic_categories': self.semantic_categories
-            }, f)
-        print(f"Model saved to {filename}")
+    with open(f'models/{filename}.pkl', 'wb') as f:
+        pickle.dump(model_state, f)
+    print(f"\nModel saved to models/{filename}.pkl")
 
-    def load_model(self, filename: str):
-        """Load the model from a file."""
-        with open(filename, 'rb') as f:
-            data = pickle.load(f)
-            self.words = data['words']
-            self.context_transitions = data['context_transitions']
-            self.transition_probabilities = data['transition_probabilities']
-            self.prev_probabilities = data['prev_probabilities']
-            self.decay_rate = data['decay_rate']
-            self.probability_threshold = data['probability_threshold']
-            self.is_converged = data['is_converged']
-            self.total_epochs = data['total_epochs']
-            self.context_size = data['context_size']
-            self.context_window = data['context_window']
-            self.layer_transitions = data['layer_transitions']
-            self.semantic_categories = data['semantic_categories']
-        print(f"Model loaded from {filename}")
-
+def load_model(generator, filename):
+    """Load the model state from a file."""
+    try:
+        with open(f'models/{filename}.pkl', 'rb') as f:
+            model_state = pickle.load(f)
+            
+        generator.words = defaultdict(lambda: defaultdict(Counter))
+        generator.words.update(model_state['words'])
+        
+        generator.context_transitions = defaultdict(Counter)
+        generator.context_transitions.update(model_state['context_transitions'])
+        
+        generator.transition_probabilities = defaultdict(dict)
+        generator.transition_probabilities.update(model_state['transition_probabilities'])
+        
+        generator.prev_probabilities = defaultdict(dict)
+        generator.prev_probabilities.update(model_state['prev_probabilities'])
+        
+        generator.total_epochs = model_state['total_epochs']
+        generator.is_converged = model_state['is_converged']
+        
+        generator.layer_transitions = []
+        for lt in model_state['layer_transitions']:
+            layer_trans = defaultdict(Counter)
+            layer_trans.update(lt)
+            generator.layer_transitions.append(layer_trans)
+            
+        generator.semantic_categories = defaultdict(str)
+        generator.semantic_categories.update(model_state['semantic_categories'])
+        
+        print(f"\nModel loaded from models/{filename}.pkl")
+        print(f"Model state: {generator.total_epochs} epochs, converged: {generator.is_converged}")
+        return True
+    except FileNotFoundError:
+        print(f"\nNo model file found at models/{filename}.pkl")
+        return False
+    except Exception as e:
+        print(f"\nError loading model: {str(e)}")
+        return False
+        
 def main():
     print("Probability-Based Context-Aware Semantic Text Generator")
     print("================================================")
     
+    # Initialize generator with optimized parameters
     generator = ErrorAwareSemanticGenerator(
         decay_rate=0.95,
-        probability_threshold=0.51,
+        probability_threshold=0.01,
         context_size=15
     )
     
+    # Create models directory if it doesn't exist
     if not os.path.exists('models'):
         os.makedirs('models')
     
@@ -421,33 +444,51 @@ def main():
         choice = input("\nEnter your choice (1-5): ").strip()
         
         if choice == "1":
-            filename = input("Enter filename: ")
-            with open(filename, 'r', encoding='utf-8') as f:
-                text = ' '.join(f.read().split()[:KB_limit])
-            print("\nTraining model...")
-            generator.train_until_convergence(text)
-        
+            try:
+                filename = input("Enter training file path: ")
+                with open(filename, 'r', encoding='utf-8') as f:
+                    text = ' '.join(f.read().split()[:KB_limit])
+                print("\nTraining model...")
+                generator.train_until_convergence(text)
+            except FileNotFoundError:
+                print(f"Error: File '{filename}' not found")
+            except Exception as e:
+                print(f"Error during training: {str(e)}")
+                
         elif choice == "2":
-            while True:
-                num_words = 250
+            try:
+                num_words = int(input("Enter number of words to generate (default 250): ") or 250)
                 generated_text = generator.generate_text(num_words)
                 print("\nGenerated text:")
                 print(generated_text)
-       
+            except ValueError:
+                print("Invalid number. Using default 250 words.")
+                generated_text = generator.generate_text(250)
+                print("\nGenerated text:")
+                print(generated_text)
+            except Exception as e:
+                print(f"Error generating text: {str(e)}")
+                
         elif choice == "3":
-            filename = input("Enter filename to save the model: ").strip()
-            generator.save_model(filename)
-        
+            try:
+                model_name = input("Enter model name to save: ")
+                save_model(generator, model_name)
+            except Exception as e:
+                print(f"Error saving model: {str(e)}")
+                
         elif choice == "4":
-            filename = input("Enter filename to load the model: ").strip()
-            generator.load_model(filename)
-        
+            try:
+                model_name = input("Enter model name to load: ")
+                load_model(generator, model_name)
+            except Exception as e:
+                print(f"Error loading model: {str(e)}")
+                
         elif choice == "5":
             print("Goodbye!")
             break
             
         else:
-            print("Invalid choice. Please try again.")
+            print("Invalid choice. Please enter 1-5.")
 
 if __name__ == "__main__":
     main()
