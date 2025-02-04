@@ -1,4 +1,4 @@
-# SynthReason Version 5.0
+# SynthReason Version 6.0
 import numpy as np
 import random
 import re
@@ -8,7 +8,27 @@ import os
 from collections import defaultdict, Counter, deque
 from typing import List, Tuple, Dict, Any, Optional, Deque
 
-KB_limit = 9999 # -1 for unlimited
+KB_limit = 999 # -1 for unlimited
+
+class ProgressBar:
+    def __init__(self, total, prefix='', suffix='', decimals=1, length=50, fill='█'):
+        self.total = total
+        self.prefix = prefix
+        self.suffix = suffix
+        self.decimals = decimals
+        self.length = length
+        self.fill = fill
+        self.iteration = 0
+
+    def print(self, iteration):
+        self.iteration = iteration
+        percent = ("{0:." + str(self.decimals) + "f}").format(100 * (iteration / float(self.total)))
+        filled_length = int(self.length * iteration // self.total)
+        bar = self.fill * filled_length + '-' * (self.length - filled_length)
+        print(f'\r{self.prefix} |{bar}| {percent}% {self.suffix}', end='')
+        if iteration == self.total:
+            print()
+            
 class ContextWindow:
     def __init__(self, block_size: int, num_blocks: int, num_layers: int = 3, layer_depth: int = 2):
         self.block_size = block_size
@@ -232,13 +252,18 @@ class ErrorAwareSemanticGenerator:
         avg_diff = total_diff / count
         return avg_diff < self.probability_threshold
 
+
     def train_until_convergence(self, text: str, max_epochs: int = 10) -> List[float]:
         """Train the model until transition probabilities converge."""
         text = self.clean_text(text)
         sentences = text.split('.')
         epoch_diffs = []
         
+        progress = ProgressBar(max_epochs, prefix='Training:', suffix='Complete', length=50)
+        
         while self.total_epochs < max_epochs:
+            progress.print(self.total_epochs)
+            
             for sentence in sentences:
                 words = sentence.lower().split()
                 self.context_window.clear()
@@ -253,23 +278,19 @@ class ErrorAwareSemanticGenerator:
                             self.context_transitions[context][word] += 1
                     
                     prev_word = words[i-1].strip('.,!?') if i > 0 else 'start'
-                    category = ()
-                    if word in self.prev_probabilities[prev_word]:
-                        category = abs(i - self.prev_probabilities[prev_word][word])
-
+                    category = self._categorize_word(word)
+                    
                     if i > 0 and not self._is_valid_word(prev_word):
                         prev_word = 'start'
                     
                     self.words[prev_word][category][word] += 1
                     self.context_window.add(word)
-            if self._compare_probabilities():
-                self._calculate_transition_probabilities()
+
+            self._calculate_transition_probabilities()
             self.is_converged = self._compare_probabilities()
             self.total_epochs += 1
             
-            if self.total_epochs % 10 == 0:
-                print(f"Epoch {self.total_epochs}")
-                
+        progress.print(max_epochs)
         print(f"\nTraining completed after {self.total_epochs} epochs")
         print(f"Converged: {self.is_converged}")
         return epoch_diffs
@@ -457,10 +478,11 @@ def main():
                 
         elif choice == "2":
             try:
-                num_words = 250
-                generated_text = generator.generate_text(num_words)
-                print("\nGenerated text:")
-                print(generated_text)
+                while True:
+                    num_words = 250
+                    generated_text = generator.generate_text(num_words)
+                    print("\nGenerated text:")
+                    print(generated_text)
             except Exception as e:
                 print(f"Error generating text: {str(e)}")
                 
