@@ -1,6 +1,6 @@
 from tqdm import tqdm
-KB_limit = 99999
-translation_dict = {"what": "descriptions.txt", "how": "actions.txt"}
+KB_limit = -1
+translation_dict = {"what": "descriptions.txt", "how": "actions.txt", "do": "verbs.txt", "describe": "picturable.txt", "grade": "adj.txt", "form": "prep.txt"}
 print(translation_dict)
 
 while True:
@@ -70,10 +70,29 @@ while True:
                                     words_in_entry[element0].add(element1)
 
                     # syntactic arguments example
+                    if search_word in words_in_entry.get("what", set()):
+                        out.update(words_in_entry.get("do", set()))
                     if search_word in words_in_entry.get("how", set()):
+                        out.update(words_in_entry.get("do", set()))
+                    if search_word in words_in_entry.get("describe", set()):
+                        out.update(words_in_entry.get("what", set()))
+                    if search_word in words_in_entry.get("grade", set()):
                         out.update(words_in_entry.get("what", set()))
                     if search_word in words_in_entry.get("what", set()):
                         out.update(words_in_entry.get("how", set()))
+                    if search_word in words_in_entry.get("describe", set()):
+                        out.update(words_in_entry.get("grade", set()))
+                    if search_word in words_in_entry.get("how", set()):
+                        out.update(words_in_entry.get("what", set()))
+                    if search_word in words_in_entry.get("form", set()):
+                        out.update(words_in_entry.get("what", set()))
+                    if search_word in words_in_entry.get("form", set()):
+                        out.update(words_in_entry.get("describe", set()))
+                    if search_word in words_in_entry.get("form", set()):
+                        out.update(words_in_entry.get("grade", set()))
+                    if search_word in words_in_entry.get("form", set()):
+                        out.update(words_in_entry.get("how", set()))
+                    
 
             print("[", ' '.join(out), "]")
             print()
