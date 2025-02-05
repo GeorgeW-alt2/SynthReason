@@ -6,7 +6,7 @@ import os
 from collections import deque, defaultdict
 
 KB_limit = -1
-BUFFER_SIZE = 1000
+BUFFER_SIZE = 999999
 
 translation_dict = {
     "what": "descriptions.txt",  # nouns (can be subjects or objects)
