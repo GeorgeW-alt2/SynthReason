@@ -380,8 +380,7 @@ class ErrorAwareSemanticGenerator:
             initial_words = ['start']
         
         self.context_window.add_multiple(initial_words)
-        generated_words.extend(initial_words)
-        
+
         current_word = initial_words[-1] if initial_words else 'start'
         attempts = 0
         max_attempts = num_words * 2
@@ -555,7 +554,7 @@ def main():
                     num_words = 250
                     generated_text = generator.generate_text(num_words)
                     print("\nGenerated text:")
-                    print(generated_text)
+                    print("AI:",generated_text)
             except Exception as e:
                 print(f"Error generating text: {str(e)}")
                 
