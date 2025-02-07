@@ -9,8 +9,7 @@ from collections import defaultdict, Counter, deque
 from typing import List, Tuple, Dict, Any, Optional, Deque
 
 KB_limit = -1 # -1 for unlimited
-STAGE0 = 1000
-STAGE1 = 1000000
+STAGE0 = 100000
 class ProgressBar:
     def __init__(self, total, prefix='', suffix='', decimals=1, length=50, fill='█'):
         self.total = total
@@ -133,20 +132,19 @@ class ErrorAwareSemanticGenerator:
         self.decay_rate = decay_rate
         self.probability_threshold = probability_threshold
         self.is_converged = False
-        self.total_epochs = 0
         self.context_size = context_size
         
         # Enhanced context window initialization with two configurations
         self.standard_context_window = ContextWindow(
-            block_size=100,
-            num_blocks=50,
+            block_size=10,
+            num_blocks=5,
             num_layers=3,
             layer_depth=2
         )
         
         self.high_dim_context_window = ContextWindow(
-            block_size=125,
-            num_blocks=150,
+            block_size=12,
+            num_blocks=15,
             num_layers=7,
             layer_depth=3
         )
@@ -181,7 +179,7 @@ class ErrorAwareSemanticGenerator:
             for sentence in phase1_sentences:
                 words = sentence.lower().split()
                 self.context_window.clear()
-                
+
                 for i, word in enumerate(words):
                     word = word.strip('.,!?')
                     if not word or not self._is_valid_word(word):
@@ -204,7 +202,7 @@ class ErrorAwareSemanticGenerator:
             self._calculate_transition_probabilities()
                 
             # Phase 2: 
-            phase2_words = ' '.join(words[STAGE0:])
+            phase2_words = ' '.join(words[STAGE0:-1])
             phase2_sentences = phase2_words.split()
             
             # Switch to high dimensionality context window for phase 2
@@ -215,7 +213,6 @@ class ErrorAwareSemanticGenerator:
                 
                 for sentence in phase2_sentences:
                     words = sentence.lower().split()
-                    self.context_window.clear()
                     
                     for i, word in enumerate(words):
                         word = word.strip('.,!?')
@@ -244,6 +241,17 @@ class ErrorAwareSemanticGenerator:
                             connection_strength = self._calculate_semantic_connection(prev_category, category)
                             self.context_window.update_layer_connection(0, 1, connection_strength)
                             self.context_window.update_layer_connection(1, 2, connection_strength)
+
+                            self.context_window.update_layer_connection(2, 3, connection_strength)
+
+                            self.context_window.update_layer_connection(3, 4, connection_strength)
+
+                            self.context_window.update_layer_connection(4, 5, connection_strength)
+
+                            self.context_window.update_layer_connection(5, 6, connection_strength)
+
+                            self.context_window.update_layer_connection(6, 7, connection_strength)
+
                 
                 self._calculate_transition_probabilities()
                 self.is_converged = self._compare_probabilities()
@@ -366,7 +374,7 @@ class ErrorAwareSemanticGenerator:
         """Generate text based on learned probabilities."""
         generated_words = []
         self.context_window.clear()
-        
+        print()
         input_text = input("Enter starting words (space-separated): ").lower().strip()
         initial_words = [word.strip('.,!?') for word in input_text.split() 
                         if self._is_valid_word(word)]
@@ -456,7 +464,6 @@ def save_model(generator, filename):
         'context_transitions': dict(generator.context_transitions),
         'transition_probabilities': dict(generator.transition_probabilities),
         'prev_probabilities': dict(generator.prev_probabilities),
-        'total_epochs': generator.total_epochs,
         'is_converged': generator.is_converged,
         'layer_transitions': [dict(lt) for lt in generator.layer_transitions],
         'semantic_categories': dict(generator.semantic_categories)
@@ -484,7 +491,6 @@ def load_model(generator, filename):
         generator.prev_probabilities = defaultdict(dict)
         generator.prev_probabilities.update(model_state['prev_probabilities'])
         
-        generator.total_epochs = model_state['total_epochs']
         generator.is_converged = model_state['is_converged']
         
         generator.layer_transitions = []
@@ -497,7 +503,6 @@ def load_model(generator, filename):
         generator.semantic_categories.update(model_state['semantic_categories'])
         
         print(f"\nModel loaded from models/{filename}.pkl")
-        print(f"Model state: {generator.total_epochs} epochs, converged: {generator.is_converged}")
         return True
     except FileNotFoundError:
         print(f"\nNo model file found at models/{filename}.pkl")
