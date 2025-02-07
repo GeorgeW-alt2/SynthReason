@@ -1,4 +1,4 @@
-# SynthReason Version 6.0
+# SynthReason Version 6.5
 import numpy as np
 import random
 import re
@@ -8,7 +8,7 @@ import os
 from collections import defaultdict, Counter, deque
 from typing import List, Tuple, Dict, Any, Optional, Deque
 
-KB_limit = 200000 # -1 for unlimited
+KB_limit = -1 # -1 for unlimited
 STAGE0 = 10000
 STAGE1 = 100000
 class ProgressBar:
@@ -138,15 +138,15 @@ class ErrorAwareSemanticGenerator:
         
         # Enhanced context window initialization with two configurations
         self.standard_context_window = ContextWindow(
-            block_size=100,
-            num_blocks=50,
+            block_size=1000,
+            num_blocks=500,
             num_layers=3,
             layer_depth=2
         )
         
         self.high_dim_context_window = ContextWindow(
-            block_size=100,
-            num_blocks=150,
+            block_size=1000,
+            num_blocks=1500,
             num_layers=7,
             layer_depth=3
         )
