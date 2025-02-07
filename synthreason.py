@@ -10,7 +10,7 @@ from datasets import load_dataset
 from collections import defaultdict, Counter, deque
 from typing import List, Tuple, Dict, Any, Optional, Deque
 
-KB_limit = 1000000000
+KB_limit = 1000000
 STAGE0 = -1
 out_length = 250
 
