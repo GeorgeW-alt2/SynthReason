@@ -8,7 +8,7 @@ import os
 from collections import defaultdict, Counter, deque
 from typing import List, Tuple, Dict, Any, Optional, Deque
 
-KB_limit = 99999 # -1 for unlimited
+KB_limit = -1 # -1 for unlimited
 STAGE0 = 1000
 STAGE1 = 1000000
 class ProgressBar:
