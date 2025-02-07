@@ -8,7 +8,7 @@ import os
 from collections import defaultdict, Counter, deque
 from typing import List, Tuple, Dict, Any, Optional, Deque
 
-KB_limit = -1 # -1 for unlimited
+KB_limit = 9999 # -1 for unlimited
 STAGE0 = 1000
 STAGE1 = 1000000
 class ProgressBar:
@@ -158,7 +158,7 @@ class ErrorAwareSemanticGenerator:
         self.layer_transitions = [defaultdict(Counter) for _ in range(7)]  # Increased to 7 layers
         self.semantic_categories = defaultdict(str)
 
-    def train_until_convergence(self, text: str, max_epochs: int = 1000) -> List[float]:
+    def train_until_convergence(self, text: str, max_epochs: int = 10) -> List[float]:
         """Train the model with two phases: standard and high dimensionality."""
         text = self.clean_text(text)
         words = text.split()
@@ -167,7 +167,7 @@ class ErrorAwareSemanticGenerator:
         phase1_words = ' '.join(words[:STAGE0])
         phase1_sentences = phase1_words.split('.')
         
-        print(f"\nPhase 1: Training first {len(phase1_sentences)} sentences with standard dimensionality...")
+        print(f"\nTraining")
         progress1 = ProgressBar(max_epochs, prefix='Phase 1:', suffix='Complete', length=50)
         
         # Use standard context window for phase 1
@@ -201,61 +201,54 @@ class ErrorAwareSemanticGenerator:
                     self.context_window.add(word)
                     
             self._calculate_transition_probabilities()
-            
-        progress1.print(max_epochs)
-        print("\nPhase 1 completed")
-        
-        # Phase 2: 
-        phase2_words = ' '.join(words[STAGE0:STAGE1])
-        phase2_sentences = phase2_words.split()
-        
-        print(f"\nPhase 2: Training next {STAGE1} words with secondary dimensionality...")
-        progress2 = ProgressBar(max_epochs, prefix='Phase 2:', suffix='Complete', length=50)
-        
-        # Switch to high dimensionality context window for phase 2
-        self.context_window = self.high_dim_context_window
-        
-        # Train phase 2
-        for epoch in range(max_epochs):
-            progress2.print(epoch)
-            
-            for sentence in phase2_sentences:
-                words = sentence.lower().split()
-                self.context_window.clear()
                 
-                for i, word in enumerate(words):
-                    word = word.strip('.,!?')
-                    if not word or not self._is_valid_word(word):
-                        continue
-                        
-                    if self.is_converged:    
-                        context = self.context_window.get_context()
-                        if context:
-                            self.context_transitions[context][word] += 1
-                    
-                    prev_word = words[i-1].strip('.,!?') if i > 0 else 'start'
-                    category = self._categorize_word(word)
-                    
-                    if i > 0 and not self._is_valid_word(prev_word):
-                        prev_word = 'start'
-                    
-                    # Add words to multiple layers for higher dimensionality
-                    self.words[prev_word][category][word] += 1
-                    for layer in range(min(3, len(self.layer_transitions))):
-                        self.context_window.add(word, layer)
-                        
-                    # Calculate semantic connections between layers
-                    if i > 0:
-                        prev_category = self._categorize_word(prev_word)
-                        connection_strength = self._calculate_semantic_connection(prev_category, category)
-                        self.context_window.update_layer_connection(0, 1, connection_strength)
-                        self.context_window.update_layer_connection(1, 2, connection_strength)
+            # Phase 2: 
+            phase2_words = ' '.join(words[STAGE0:STAGE1])
+            phase2_sentences = phase2_words.split()
             
-            self._calculate_transition_probabilities()
-            self.is_converged = self._compare_probabilities()
             
-        progress2.print(max_epochs)
-        print(f"\nTraining completed after {max_epochs * 2} total epochs")
+            # Switch to high dimensionality context window for phase 2
+            self.context_window = self.high_dim_context_window
+            
+            # Train phase 2
+            for epoch in range(max_epochs):
+                
+                for sentence in phase2_sentences:
+                    words = sentence.lower().split()
+                    self.context_window.clear()
+                    
+                    for i, word in enumerate(words):
+                        word = word.strip('.,!?')
+                        if not word or not self._is_valid_word(word):
+                            continue
+                            
+                        if self.is_converged:    
+                            context = self.context_window.get_context()
+                            if context:
+                                self.context_transitions[context][word] += 1
+                        
+                        prev_word = words[i-1].strip('.,!?') if i > 0 else 'start'
+                        category = self._categorize_word(word)
+                        
+                        if i > 0 and not self._is_valid_word(prev_word):
+                            prev_word = 'start'
+                        
+                        # Add words to multiple layers for higher dimensionality
+                        self.words[prev_word][category][word] += 1
+                        for layer in range(min(3, len(self.layer_transitions))):
+                            self.context_window.add(word, layer)
+                            
+                        # Calculate semantic connections between layers
+                        if i > 0:
+                            prev_category = self._categorize_word(prev_word)
+                            connection_strength = self._calculate_semantic_connection(prev_category, category)
+                            self.context_window.update_layer_connection(0, 1, connection_strength)
+                            self.context_window.update_layer_connection(1, 2, connection_strength)
+                
+                self._calculate_transition_probabilities()
+                self.is_converged = self._compare_probabilities()
+            
+        print(f"\nTraining complete.")
         print(f"Converged: {self.is_converged}")
         
         # Reset to high dimensionality context window for future use
