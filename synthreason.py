@@ -1,4 +1,4 @@
-# SynthReason Version 6.5
+# SynthReason Version 6.0
 import numpy as np
 import random
 import re
@@ -9,8 +9,8 @@ from collections import defaultdict, Counter, deque
 from typing import List, Tuple, Dict, Any, Optional, Deque
 
 KB_limit = -1 # -1 for unlimited
-STAGE0 = 10000
-STAGE1 = 100000
+STAGE0 = 1000
+STAGE1 = 10000
 class ProgressBar:
     def __init__(self, total, prefix='', suffix='', decimals=1, length=50, fill='█'):
         self.total = total
@@ -138,15 +138,15 @@ class ErrorAwareSemanticGenerator:
         
         # Enhanced context window initialization with two configurations
         self.standard_context_window = ContextWindow(
-            block_size=1000,
-            num_blocks=500,
+            block_size=100,
+            num_blocks=50,
             num_layers=3,
             layer_depth=2
         )
         
         self.high_dim_context_window = ContextWindow(
-            block_size=1000,
-            num_blocks=1500,
+            block_size=100,
+            num_blocks=150,
             num_layers=7,
             layer_depth=3
         )
@@ -249,7 +249,7 @@ class ErrorAwareSemanticGenerator:
                         prev_category = self._categorize_word(prev_word)
                         connection_strength = self._calculate_semantic_connection(prev_category, category)
                         self.context_window.update_layer_connection(0, 1, connection_strength)
-                        self.context_window.update_layer_connection(1, 2, connection_strength * 0.8)
+                        self.context_window.update_layer_connection(1, 2, connection_strength)
             
             self._calculate_transition_probabilities()
             self.is_converged = self._compare_probabilities()
