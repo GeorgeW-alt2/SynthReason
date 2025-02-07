@@ -138,15 +138,15 @@ class ErrorAwareSemanticGenerator:
         
         # Enhanced context window initialization with two configurations
         self.standard_context_window = ContextWindow(
-            block_size=1000,
-            num_blocks=500,
+            block_size=100,
+            num_blocks=50,
             num_layers=3,
             layer_depth=2
         )
         
         self.high_dim_context_window = ContextWindow(
-            block_size=1000,
-            num_blocks=1500,
+            block_size=100,
+            num_blocks=150,
             num_layers=7,
             layer_depth=3
         )
@@ -415,7 +415,8 @@ class ErrorAwareSemanticGenerator:
                         total_count = sum(word_counts.values())
                         categories.append(category)
                         weights.append(total_count)
-                
+                        self.context_window.add_multiple(category)
+
                 if not categories:
                     current_word = random.choice([word for word in generated_words[-3:] 
                                                if self._is_valid_word(word)] or ['start'])
