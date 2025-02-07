@@ -9,7 +9,7 @@ from collections import defaultdict, Counter, deque
 from typing import List, Tuple, Dict, Any, Optional, Deque
 
 KB_limit = -1 # -1 for unlimited
-STAGE0 = 100000
+STAGE0 = -1
 class ProgressBar:
     def __init__(self, total, prefix='', suffix='', decimals=1, length=50, fill='█'):
         self.total = total
