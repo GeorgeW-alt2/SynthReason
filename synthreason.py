@@ -1,4 +1,4 @@
-# SynthReason Version 8.0
+# SynthReason Version 9.0
 import numpy as np
 import random
 import re
@@ -8,8 +8,10 @@ import os
 from collections import defaultdict, Counter, deque
 from typing import List, Tuple, Dict, Any, Optional, Deque
 
-KB_limit = -1 # -1 for unlimited
+KB_limit = 100000
 STAGE0 = -1
+out_length = 250
+
 class ProgressBar:
     def __init__(self, total, prefix='', suffix='', decimals=1, length=50, fill='█'):
         self.total = total
@@ -510,74 +512,308 @@ def load_model(generator, filename):
     except Exception as e:
         print(f"\nError loading model: {str(e)}")
         return False
-        
-def main():
-    print("Probability-Based Context-Aware Semantic Text Generator")
-    print("================================================")
+import os
+from datasets import load_dataset
+import time
+
+def download_huggingface_dataset(dataset_name: str, subset: str = None, split: str = 'train', 
+                               text_column: str = 'text', num_examples: int = 1000) -> str:
+    """
+    Download and process text from a Hugging Face dataset.
     
-    # Initialize generator with optimized parameters
+    Args:
+        dataset_name: Name of the dataset on Hugging Face
+        subset: Optional subset/configuration of the dataset
+        split: Which split to use ('train', 'test', 'validation')
+        text_column: Name of the column containing the text
+        num_examples: Number of examples to download
+    
+    Returns:
+        str: Combined text from the dataset
+    """
+    try:
+        # Load dataset
+        if subset:
+            dataset = load_dataset(dataset_name, subset, split=split)
+        else:
+            dataset = load_dataset(dataset_name, split=split)
+        
+        # Limit to specified number of examples
+        if len(dataset) > num_examples:
+            dataset = dataset.select(range(num_examples))
+        
+        # Extract text from the specified column
+        texts = dataset[text_column]
+        
+        # Filter out empty texts and join
+        texts = [text for text in texts if text and isinstance(text, str)]
+        return "\n\n".join(texts)
+        
+    except Exception as e:
+        raise Exception(f"Error downloading dataset {dataset_name}: {str(e)}")
+
+def download_huggingface_datasets(output_dir: str = 'training_data',
+                                progress_callback = None) -> None:
+    """
+    Download multiple curated datasets from Hugging Face.
+    """
+    # Dictionary of dataset configurations
+    datasets = {
+        'wikitext': {
+            'name': 'wikitext',
+            'subset': 'wikitext-103-v1',
+            'text_column': 'text',
+            'num_examples': KB_limit
+        }
+    }
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    for i, (dataset_key, config) in enumerate(datasets.items(), 1):
+        try:
+            print(f"\nDownloading {dataset_key} dataset...")
+            text = download_huggingface_dataset(
+                config['name'],
+                subset=config.get('subset'),
+                text_column=config['text_column'],
+                num_examples=config['num_examples']
+            )
+            
+            # Save to file
+            output_file = os.path.join(output_dir, f"{dataset_key}.txt")
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(text)
+            
+            if progress_callback:
+                progress_callback(i)
+            
+            # Small delay between downloads
+            time.sleep(1)
+            
+        except Exception as e:
+            print(f"Error downloading {dataset_key}: {str(e)}")
+            continue        
+def main():
+    """Main function for the Text Generator application."""
     generator = ErrorAwareSemanticGenerator(
         decay_rate=0.95,
         probability_threshold=0.01,
         context_size=15
     )
     
-    # Create models directory if it doesn't exist
-    if not os.path.exists('models'):
-        os.makedirs('models')
+    os.makedirs('models', exist_ok=True)
+    os.makedirs('training_data', exist_ok=True)
+    
+    menu_options = {
+        '1': 'Train model',
+        '2': 'Generate text',
+        '3': 'Save model',
+        '4': 'Load model',
+        '5': 'Download datasets',
+        '6': 'View model stats',
+        '7': 'Exit'
+    }
+    
+    print("\nProbability-Based Context-Aware Semantic Text Generator")
+    print("================================================")
     
     while True:
-        print("\nOptions:")
-        print("1. Train model")
-        print("2. Generate text")
-        print("3. Save model")
-        print("4. Load model")
-        print("5. Exit")
-        
-        choice = input("\nEnter your choice (1-5): ").strip()
-        
-        if choice == "1":
-            try:
-                filename = input("Enter training file path: ")
-                with open(filename, 'r', encoding='utf-8') as f:
-                    text = ' '.join(f.read().split()[:KB_limit])
-                print("\nTraining model...")
-                generator.train_until_convergence(text)
-            except FileNotFoundError:
-                print(f"Error: File '{filename}' not found")
-            except Exception as e:
-                print(f"Error during training: {str(e)}")
+        try:
+            print("\nOptions:")
+            for key, value in menu_options.items():
+                print(f"{key}. {value}")
                 
-        elif choice == "2":
-            try:
-                while True:
-                    num_words = 250
-                    generated_text = generator.generate_text(num_words)
-                    print("\nGenerated text:")
-                    print("AI:",generated_text)
-            except Exception as e:
-                print(f"Error generating text: {str(e)}")
-                
-        elif choice == "3":
-            try:
-                model_name = input("Enter model name to save: ")
-                save_model(generator, model_name)
-            except Exception as e:
-                print(f"Error saving model: {str(e)}")
-                
-        elif choice == "4":
-            try:
-                model_name = input("Enter model name to load: ")
-                load_model(generator, model_name)
-            except Exception as e:
-                print(f"Error loading model: {str(e)}")
-                
-        elif choice == "5":
-            print("Goodbye!")
-            break
+            choice = input("\nEnter choice (1-7): ").strip()
             
-        else:
-            print("Invalid choice. Please enter 1-5.")
+            if choice == '1':  # Train model
+                print("\nSelect training source:")
+                print("1. Local file")
+                print("2. Downloaded dataset")
+                source = input("Choose source (1-2): ").strip()
+                
+                if source == '1':
+                    filepath = input("Enter filepath: ").strip()
+                    if not os.path.exists(filepath):
+                        print("Error: File not found")
+                        continue
+                        
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        text = ' '.join(f.read().split()[:KB_limit])
+                        
+                elif source == '2':
+                    data_dir = 'training_data'
+                    datasets = [f for f in os.listdir(data_dir) if f.endswith('.txt')]
+                    
+                    if not datasets:
+                        print("No datasets found. Please download them first.")
+                        continue
+                        
+                    print("\nAvailable datasets:")
+                    for idx, dataset in enumerate(datasets, 1):
+                        print(f"{idx}. {dataset[:-4]}")
+                        
+                    try:
+                        dataset_idx = int(input("Choose dataset number: "))
+                        if not 1 <= dataset_idx <= len(datasets):
+                            print("Invalid selection")
+                            continue
+                            
+                        filepath = os.path.join(data_dir, datasets[dataset_idx-1])
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            text = ' '.join(f.read().split()[:KB_limit])
+                    except ValueError:
+                        print("Please enter a valid number")
+                        continue
+                else:
+                    print("Invalid choice")
+                    continue
+                
+                print("\nStarting training...")
+                generator.train_until_convergence(text)
+                
+            elif choice == '2':  # Generate text
+                if not generator.words:
+                    print("Error: Model not trained. Please train or load a model first.")
+                    continue
+                    
+                while True:
+                    try:
+                        
+                        print("\nGenerated text:")
+                        print("-" * 50)
+                        print(generator.generate_text(out_length))
+                        print("-" * 50)
+                        
+                       
+                            
+                    except ValueError:
+                        print("Please enter a valid number")
+                        
+            elif choice == '3':  # Save model
+                if not generator.words:
+                    print("Error: No model to save. Please train a model first.")
+                    continue
+                    
+                name = input("Enter model name: ").strip()
+                if name:
+                    save_model(generator, name)
+                else:
+                    print("Invalid model name")
+                    
+            elif choice == '4':  # Load model
+                models = [f[:-4] for f in os.listdir('models') if f.endswith('.pkl')]
+                
+                if not models:
+                    print("No saved models found")
+                    continue
+                    
+                print("\nAvailable models:")
+                for idx, model in enumerate(models, 1):
+                    print(f"{idx}. {model}")
+                    
+                try:
+                    model_idx = int(input("Choose model number: "))
+                    if not 1 <= model_idx <= len(models):
+                        print("Invalid selection")
+                        continue
+                        
+                    load_model(generator, models[model_idx-1])
+                except ValueError:
+                    print("Please enter a valid number")
+                    
+            elif choice == '5':  # Download datasets
+                print("\nDownloading options:")
+                print("1. Download all datasets")
+                print("2. Download specific dataset")
+                download_choice = input("Choose option (1-2): ").strip()
+                
+                if download_choice == '1':
+                    progress = ProgressBar(5, prefix='Downloading:', suffix='Complete', length=50)
+                    download_huggingface_datasets(progress_callback=progress.print)
+                    
+                elif download_choice == '2':
+                    datasets = ['wikitext', 'bookcorpus', 'oscar', 'c4', 'pile']
+                    print("\nAvailable datasets:")
+                    for idx, dataset in enumerate(datasets, 1):
+                        print(f"{idx}. {dataset}")
+                        
+                    try:
+                        dataset_idx = int(input("Choose dataset number: "))
+                        if not 1 <= dataset_idx <= len(datasets):
+                            print("Invalid selection")
+                            continue
+                            
+                        dataset = datasets[dataset_idx-1]
+                        progress = ProgressBar(1, prefix='Downloading:', suffix='Complete', length=50)
+                        
+                        if dataset == 'wikitext':
+                            text = download_huggingface_dataset('wikitext', 'wikitext-103-v1')
+                        elif dataset == 'bookcorpus':
+                            text = download_huggingface_dataset('bookcorpus')
+                        elif dataset == 'oscar':
+                            text = download_huggingface_dataset('oscar', 'unshuffled_deduplicated_en')
+                        elif dataset == 'c4':
+                            text = download_huggingface_dataset('c4', 'en')
+                        elif dataset == 'pile':
+                            text = download_huggingface_dataset('the_pile')
+                            
+                        with open(f'training_data/{dataset}.txt', 'w', encoding='utf-8') as f:
+                            f.write(text)
+                            
+                        progress.print(1)
+                        print(f"\n{dataset} dataset downloaded successfully!")
+                        
+                    except ValueError:
+                        print("Please enter a valid number")
+                else:
+                    print("Invalid choice")
+                    
+            elif choice == '6':  # View model stats
+                if not generator.words:
+                    print("Error: No model loaded. Please train or load a model first.")
+                    continue
+                    
+                unique_words = set()
+                for word_dict in generator.words.values():
+                    for category_dict in word_dict.values():
+                        unique_words.update(category_dict.keys())
+                        
+                print("\nModel Statistics")
+                print("-" * 20)
+                print(f"Unique words: {len(unique_words)}")
+                print(f"Context transitions: {len(generator.context_transitions)}")
+                print(f"Model converged: {generator.is_converged}")
+                
+                # Show top words by category
+                categories = ['verbs', 'nouns', 'adverbs', 'determiners', 'prepositions']
+                print("\nTop 5 words by category:")
+                for category in categories:
+                    words = []
+                    for word_dict in generator.words.values():
+                        if category in word_dict:
+                            words.extend(word_dict[category].items())
+                            
+                    if words:
+                        sorted_words = sorted(words, key=lambda x: x[1], reverse=True)[:5]
+                        print(f"\n{category.capitalize()}:")
+                        for word, count in sorted_words:
+                            print(f"  {word}: {count}")
+                            
+                input("\nPress Enter to continue...")
+                
+            elif choice == '7':  # Exit
+                print("\nGoodbye!")
+                break
+                
+            else:
+                print("Invalid choice")
+                
+        except KeyboardInterrupt:
+            print("\nOperation cancelled")
+            continue
+        except Exception as e:
+            print(f"An error occurred: {str(e)}")
+            continue
 
 if __name__ == "__main__":
     main()
