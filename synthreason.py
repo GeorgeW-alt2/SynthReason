@@ -1,4 +1,4 @@
-# SynthReason Version 10.0
+# SynthReason Version 9.0
 import numpy as np
 import random
 import re
@@ -10,7 +10,7 @@ from datasets import load_dataset
 from collections import defaultdict, Counter, deque
 from typing import List, Tuple, Dict, Any, Optional, Deque
 
-KB_limit = 10000000
+KB_limit = 1000000000
 STAGE0 = -1
 out_length = 250
 
@@ -140,15 +140,15 @@ class ErrorAwareSemanticGenerator:
         
         # Enhanced context window initialization with two configurations
         self.standard_context_window = ContextWindow(
-            block_size=50,
-            num_blocks=70,
+            block_size=5,
+            num_blocks=7,
             num_layers=3,
             layer_depth=2
         )
         
         self.high_dim_context_window = ContextWindow(
-            block_size=120,
-            num_blocks=110,
+            block_size=12,
+            num_blocks=11,
             num_layers=7,
             layer_depth=3
         )
