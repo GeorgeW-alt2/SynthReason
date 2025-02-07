@@ -204,7 +204,7 @@ class ErrorAwareSemanticGenerator:
             self._calculate_transition_probabilities()
                 
             # Phase 2: 
-            phase2_words = ' '.join(words[STAGE0:STAGE1])
+            phase2_words = ' '.join(words[STAGE0:])
             phase2_sentences = phase2_words.split()
             
             # Switch to high dimensionality context window for phase 2
