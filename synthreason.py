@@ -396,54 +396,44 @@ class ErrorAwareSemanticGenerator:
             attempts += 1
             
             context = self.context_window.get_context()
-            if context in self.context_transitions and self.context_transitions[context]:
-                # Use context-based transitions
-                candidates = [(word, count) for word, count in self.context_transitions[context].items() 
-                            if self._is_valid_word(word)]
-                if candidates:
-                    words, counts = zip(*candidates)
-                    next_word = random.choices(words, weights=counts)[0]
-                else:
-                    continue
-            else:
-                # Use word-based transitions
-                if current_word not in self.words:
-                    valid_words = [word for word in generated_words[-3:] 
-                                 if self._is_valid_word(word)]
-                    current_word = random.choice(valid_words if valid_words else ['start'])
-                    continue
-                
-                categories = []
-                weights = []
-                
-                for category, word_counts in self.words[current_word].items():
-                    if word_counts:
-                        total_count = sum(word_counts.values())
-                        categories.append(category)
-                        weights.append(total_count)
-                        self.context_window.add_multiple(category)
-
-                if not categories:
-                    current_word = random.choice([word for word in generated_words[-3:] 
-                                               if self._is_valid_word(word)] or ['start'])
-                    continue
-                
-                category = random.choices(categories, weights=weights)[0]
-                
-                valid_words = [(word, count) for word, count in self.words[current_word][category].items()
+            # Use word-based transitions
+            if current_word not in self.words:
+                valid_words = [word for word in generated_words[-3:] 
                              if self._is_valid_word(word)]
+                current_word = random.choice(valid_words if valid_words else ['start'])
+                continue
+            
+            categories = []
+            weights = []
+            
+            for category, word_counts in self.words[current_word].items():
+                if word_counts:
+                    total_count = sum(word_counts.values())
+                    categories.append(category)
+                    weights.append(total_count)
+
+            if not categories:
+                current_word = random.choice([word for word in generated_words[-3:] 
+                                           if self._is_valid_word(word)] or ['start'])
+                continue
+            
+            category = random.choices(categories, weights=weights)[0]
+            
+            valid_words = [(word, count) for word, count in self.words[current_word][category].items()
+                         if self._is_valid_word(word)]
+            
+            if not valid_words:
+                continue
                 
-                if not valid_words:
-                    continue
-                    
-                words, counts = zip(*valid_words)
-                next_word = random.choices(words, weights=counts)[0]
+            words, counts = zip(*valid_words)
+            next_word = random.choices(words, weights=counts)[0]
             
             if next_word != (generated_words[-1] if generated_words else ''):
                 generated_words.append(next_word)
                 self.context_window.add(next_word)
                 current_word = next_word
-            
+                self.context_window.add_multiple(categories)
+
                 if next_word.endswith('.'):
                     self.context_window.clear()
                     if len(generated_words) < num_words:
