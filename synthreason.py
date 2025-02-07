@@ -1,4 +1,4 @@
-# SynthReason Version 6.0
+# SynthReason Version 7.0
 import numpy as np
 import random
 import re
@@ -10,7 +10,7 @@ from typing import List, Tuple, Dict, Any, Optional, Deque
 
 KB_limit = -1 # -1 for unlimited
 STAGE0 = 1000
-STAGE1 = 10000
+STAGE1 = 1000000
 class ProgressBar:
     def __init__(self, total, prefix='', suffix='', decimals=1, length=50, fill='█'):
         self.total = total
