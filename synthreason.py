@@ -1,14 +1,16 @@
-# SynthReason Version 9.0
+# SynthReason Version 10.0
 import numpy as np
 import random
 import re
 import pickle
 import math
 import os
+import time
+from datasets import load_dataset
 from collections import defaultdict, Counter, deque
 from typing import List, Tuple, Dict, Any, Optional, Deque
 
-KB_limit = 100000
+KB_limit = 1000000000
 STAGE0 = -1
 out_length = 250
 
@@ -138,15 +140,15 @@ class ErrorAwareSemanticGenerator:
         
         # Enhanced context window initialization with two configurations
         self.standard_context_window = ContextWindow(
-            block_size=10,
-            num_blocks=5,
+            block_size=50,
+            num_blocks=70,
             num_layers=3,
             layer_depth=2
         )
         
         self.high_dim_context_window = ContextWindow(
-            block_size=12,
-            num_blocks=15,
+            block_size=120,
+            num_blocks=110,
             num_layers=7,
             layer_depth=3
         )
@@ -275,7 +277,7 @@ class ErrorAwareSemanticGenerator:
             ('prepositions', 'nouns'): 0.6
         }
         
-        return relationship_matrix.get((category1, category2), 0.3)
+        return relationship_matrix.get((category1, category2), 0.9)
         
     def _format_generated_text(self, words: List[str]) -> str:
         text = ' '.join(words)
@@ -512,9 +514,6 @@ def load_model(generator, filename):
     except Exception as e:
         print(f"\nError loading model: {str(e)}")
         return False
-import os
-from datasets import load_dataset
-import time
 
 def download_huggingface_dataset(dataset_name: str, subset: str = None, split: str = 'train', 
                                text_column: str = 'text', num_examples: int = 1000) -> str:
