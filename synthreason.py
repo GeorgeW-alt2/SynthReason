@@ -1,4 +1,4 @@
-# SynthReason Version 7.0
+# SynthReason Version 8.0
 import numpy as np
 import random
 import re
