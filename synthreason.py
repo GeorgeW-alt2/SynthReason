@@ -140,15 +140,15 @@ class ErrorAwareSemanticGenerator:
         
         # Enhanced context window initialization with two configurations
         self.standard_context_window = ContextWindow(
-            block_size=5,
-            num_blocks=7,
+            block_size=2,
+            num_blocks=4,
             num_layers=3,
             layer_depth=2
         )
         
         self.high_dim_context_window = ContextWindow(
-            block_size=12,
-            num_blocks=11,
+            block_size=7,
+            num_blocks=5,
             num_layers=7,
             layer_depth=3
         )
