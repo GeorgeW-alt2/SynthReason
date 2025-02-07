@@ -158,7 +158,7 @@ class ErrorAwareSemanticGenerator:
         self.layer_transitions = [defaultdict(Counter) for _ in range(7)]  # Increased to 7 layers
         self.semantic_categories = defaultdict(str)
 
-    def train_until_convergence(self, text: str, max_epochs: int = 10) -> List[float]:
+    def train_until_convergence(self, text: str, max_epochs: int = 1000) -> List[float]:
         """Train the model with two phases: standard and high dimensionality."""
         text = self.clean_text(text)
         words = text.split()
