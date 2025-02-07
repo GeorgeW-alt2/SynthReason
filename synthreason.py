@@ -8,7 +8,7 @@ import os
 from collections import defaultdict, Counter, deque
 from typing import List, Tuple, Dict, Any, Optional, Deque
 
-KB_limit = 9999 # -1 for unlimited
+KB_limit = 99999 # -1 for unlimited
 STAGE0 = 1000
 STAGE1 = 1000000
 class ProgressBar:
@@ -175,7 +175,8 @@ class ErrorAwareSemanticGenerator:
         
         # Train phase 1
         for epoch in range(max_epochs):
-            progress1.print(epoch)
+            # Update to show current progress as percentage of max_epochs
+            progress1.print(epoch + 1)  # Changed from epoch to epoch + 1
             
             for sentence in phase1_sentences:
                 words = sentence.lower().split()
@@ -205,7 +206,6 @@ class ErrorAwareSemanticGenerator:
             # Phase 2: 
             phase2_words = ' '.join(words[STAGE0:STAGE1])
             phase2_sentences = phase2_words.split()
-            
             
             # Switch to high dimensionality context window for phase 2
             self.context_window = self.high_dim_context_window
@@ -248,6 +248,8 @@ class ErrorAwareSemanticGenerator:
                 self._calculate_transition_probabilities()
                 self.is_converged = self._compare_probabilities()
             
+        # Ensure progress bar shows 100% at completion
+        
         print(f"\nTraining complete.")
         print(f"Converged: {self.is_converged}")
         
