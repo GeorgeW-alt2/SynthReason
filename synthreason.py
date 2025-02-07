@@ -167,7 +167,7 @@ class ErrorAwareSemanticGenerator:
         phase1_words = ' '.join(words[:STAGE0])
         phase1_sentences = phase1_words.split('.')
         
-        print(f"\nPhase 1: Training first {STAGE0} words with standard dimensionality...")
+        print(f"\nPhase 1: Training first {len(phase1_sentences)} sentences with standard dimensionality...")
         progress1 = ProgressBar(max_epochs, prefix='Phase 1:', suffix='Complete', length=50)
         
         # Use standard context window for phase 1
@@ -207,9 +207,9 @@ class ErrorAwareSemanticGenerator:
         
         # Phase 2: 
         phase2_words = ' '.join(words[STAGE0:STAGE1])
-        phase2_sentences = phase2_words.split('.')
+        phase2_sentences = phase2_words.split()
         
-        print(f"\nPhase 2: Training next {STAGE1} words with higher dimensionality...")
+        print(f"\nPhase 2: Training next {STAGE1} words with secondary dimensionality...")
         progress2 = ProgressBar(max_epochs, prefix='Phase 2:', suffix='Complete', length=50)
         
         # Switch to high dimensionality context window for phase 2
