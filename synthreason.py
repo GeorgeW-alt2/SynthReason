@@ -9,7 +9,6 @@ from typing import List, Tuple, Dict, Optional, Any, Deque
 from collections import defaultdict, Counter, deque
 
 # Constants
-KB_LIMIT = 1000000
 STAGE0 = 1000
 OUT_LENGTH = 250
 
