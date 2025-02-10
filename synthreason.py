@@ -49,7 +49,7 @@ class SemanticGenerator:
             true_dist = self._normalize_probabilities(self.words[current_context][category])
             predicted_dist = self._normalize_probabilities(Counter(generated_words))
 
-            loss = self._cross_entropy_loss(true_dist, predicted_dist)
+            loss = self._cross_entropy_loss(predicted_dist, true_dist) # Can be swapped
             adjusted_weights = {word: count / (loss + 1e-5) for word, count in true_dist.items()}
 
             next_word = random.choices(list(adjusted_weights.keys()), weights=adjusted_weights.values())[-1]
