@@ -230,7 +230,7 @@ class ErrorAwareSemanticGenerator:
         """Compute the recurrence weight for a word."""
         weight = 0.0
         for i, prev_word in enumerate(generated_words):
-            if word == prev_word:
+            if word != prev_word:
                 decay = math.exp(-0.1 * (len(generated_words) - i))
                 weight += lambda_factor * decay
         return weight
