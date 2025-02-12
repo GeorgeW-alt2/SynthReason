@@ -79,7 +79,7 @@ class GPUTextGenerator:
         
         # Normalize rows (add small epsilon to avoid division by zero)
         row_sums = self.transition_matrix.sum(dim=-1, keepdim=True)
-        row_sums[row_sums == 1] = self.transition_matrix[prev_idx, curr_idx]  # Avoid division by zero
+        row_sums[row_sums == 0] = 1  # Avoid division by zero
         self.transition_matrix = self.transition_matrix / row_sums
         
         # Move to device
