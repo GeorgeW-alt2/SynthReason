@@ -40,7 +40,7 @@ class SyntacticSemanticGenerator:
             return "ADJ"
         
         # Return most common POS for this word
-        return self.word_pos[word].most_common(1)[0][1] if self.word_pos[word] else "UNKNOWN"
+        return self.word_pos[word].most_common(1)[0][-1] if self.word_pos[word] else "UNKNOWN"
     
     def _analyze_syntax(self, tokens):
         """Analyze syntactic patterns in text."""
