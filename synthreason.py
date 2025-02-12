@@ -1,187 +1,183 @@
 import random
-import math
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from collections import defaultdict, Counter
 
-class TextGenerator:
-    def __init__(self, context_window=3, traceback_depth=5):
-        self.words = defaultdict(lambda: defaultdict(Counter))
-        self.word_transitions = defaultdict(Counter)  # Track word-to-word transitions
-        self.sequence_scores = defaultdict(float)     # Track sequence scores
+class GPUTextGenerator:
+    def __init__(self, context_window=3, traceback_depth=5, batch_size=1000, use_gpu=True):
+        """
+        Text generator with optional GPU acceleration.
+        
+        Args:
+            context_window (int): Number of previous words to consider
+            traceback_depth (int): Depth of pattern tracking
+            batch_size (int): Batch size for processing
+            use_gpu (bool): Whether to use GPU if available
+        """
         self.context_window = context_window
         self.traceback_depth = traceback_depth
-        self.history = []  # Track generation history
+        self.batch_size = batch_size
         
-    def _get_context(self, sequence, position):
-        """Get context at a specific position."""
-        start = max(0, position - self.context_window)
-        context = sequence[start:position]
-        return tuple(context)
+        # GPU setup
+        self.device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
+        print(f"Using device: {self.device}")
+        
+        # Vocabulary management
+        self.word_to_idx = {}
+        self.idx_to_word = []
+        
+        # Transition matrix will be a PyTorch tensor
+        self.transition_matrix = None
+        self.pattern_store = defaultdict(float)
     
+    def _get_word_index(self, word, train=False):
+        """Get or create word index."""
+        if word not in self.word_to_idx:
+            if train:
+                idx = len(self.word_to_idx)
+                self.word_to_idx[word] = idx
+                self.idx_to_word.append(word)
+                return idx
+            return None
+        return self.word_to_idx[word]
+
     def train(self, text):
-        """Train the model on input text."""
+        """Train model with GPU-accelerated approach."""
         words = text.split()
-        self.history.extend(words)  # Add to history
+        print(f"Vocabulary building...")
         
-        # Build transition probabilities
-        for i in range(len(words)):
-            # Get context
-            context = self._get_context(words, i)
-            word = words[i]
-            
-            # Store transitions
-            self.words[context]["global"][word] += 1
-            
-            # Track word-to-word transitions
-            if i > 0:
-                prev_word = words[i-1]
-                self.word_transitions[prev_word][word] += 1
-            
-            # Track n-gram sequences
-            for n in range(2, self.context_window + 1):
-                if i >= n:
-                    sequence = tuple(words[i-n:i])
-                    self.sequence_scores[sequence] += 1
-                    
-    def _score_sequence(self, sequence, position):
-        """Score a sequence at a position looking backward."""
-        score = 0.0
+        # Build vocabulary more efficiently
+        word_counts = Counter(words)
+        # Only keep words that appear more than once
+        for word, count in word_counts.items():
+            if count > 1:
+                self._get_word_index(word, train=True)
         
-        # Look back through traceback window
-        start = max(0, position - self.traceback_depth)
-        for i in range(start, position + 1):
-            # Get local context
-            context = self._get_context(sequence, i)
-            if i < len(sequence):
-                word = sequence[i]
-                
-                # Score based on context probability
-                if context in self.words:
-                    total = sum(self.words[context]["global"].values())
-                    if total > 0:
-                        prob = self.words[context]["global"][word] / total
-                        score += math.log(prob + 1e-10)
-                
-                # Score based on transitions
-                if i > 0:
-                    prev_word = sequence[i-1]
-                    if prev_word in self.word_transitions:
-                        total = sum(self.word_transitions[prev_word].values())
-                        if total > 0:
-                            prob = self.word_transitions[prev_word][word] / total
-                            score += math.log(prob + 1e-10)
-                
-                # Score based on n-gram frequency
-                for n in range(2, min(self.context_window + 1, i + 1)):
-                    sequence_slice = tuple(sequence[i-n:i])
-                    if sequence_slice in self.sequence_scores:
-                        score += math.log(self.sequence_scores[sequence_slice] + 1)
+        vocab_size = len(self.word_to_idx)
+        print(f"Vocabulary size: {vocab_size}")
         
-        return score
-    
-    def _traceback_optimize(self, sequence, position):
-        """Optimize sequence by looking back and trying alternatives."""
-        best_sequence = sequence
-        best_score = self._score_sequence(sequence, position)
+        # Convert words to indices, skipping unknown words
+        word_indices = []
+        for word in words:
+            idx = self.word_to_idx.get(word)
+            if idx is not None:
+                word_indices.append(idx)
         
-        # Look back through traceback window
-        start = max(0, position - self.traceback_depth)
-        for i in range(start, position):
-            context = self._get_context(sequence, i)
-            if context in self.words:
-                # Get top alternative words at this position
-                alternatives = self.words[context]["global"].most_common(5)
-                
-                for alt_word, _ in alternatives:
-                    # Create alternative sequence
-                    new_sequence = sequence[:i] + [alt_word] + sequence[i+1:]
-                    new_score = self._score_sequence(new_sequence, position)
-                    
-                    # Keep if better
-                    if new_score > best_score:
-                        best_sequence = new_sequence
-                        best_score = new_score
+        print("Building transition matrix...")
+        # Create a PyTorch tensor for transition matrix
+        self.transition_matrix = torch.zeros((vocab_size, vocab_size), 
+                                             dtype=torch.float32, 
+                                             device=self.device)
         
-        return best_sequence
-    
-    def generate_with_traceback(self, seed, length=100):
-        """Generate text using traceback optimization."""
-        # Initialize with seed
-        sequence = seed.split()
+        # Count transitions
+        for i in range(1, len(word_indices)):
+            prev_idx = word_indices[i-1]
+            curr_idx = word_indices[i]
+            self.transition_matrix[prev_idx, curr_idx] += 1
+        
+        # Normalize rows (add small epsilon to avoid division by zero)
+        row_sums = self.transition_matrix.sum(dim=1, keepdim=True)
+        row_sums[row_sums == 0] = 1  # Avoid division by zero
+        self.transition_matrix = self.transition_matrix / row_sums
+        
+        # Move to device
+        self.transition_matrix = self.transition_matrix.to(self.device)
+        
+        print("Processing patterns...")
+        # Store only frequent patterns
+        pattern_counts = Counter()
+        for i in range(2, len(word_indices)):
+            pattern = tuple(word_indices[i-1:i+1])
+            pattern_counts[pattern] += 1
+        
+        # Keep only patterns that appear multiple times
+        for pattern, count in pattern_counts.items():
+            if count > 1:
+                self.pattern_store[pattern] = count
+        
+        print("Training complete!")
+
+    def _get_next_word_probabilities(self, sequence):
+        """Calculate probabilities for next word using GPU."""
+        if not sequence:
+            # Uniform distribution
+            return torch.ones(len(self.idx_to_word), device=self.device) / len(self.idx_to_word)
+        
+        # Get transition probabilities from last word
+        last_idx = sequence[-1]
+        probs = self.transition_matrix[last_idx]
+        
+        # Add pattern influence
+        if len(sequence) >= 2:
+            pattern_prefix = tuple(sequence[-2:])
+            for word_idx in range(len(self.idx_to_word)):
+                pattern = pattern_prefix + (word_idx,)
+                if pattern in self.pattern_store:
+                    probs[word_idx] += 0.1 * self.pattern_store[pattern]
+        
+        # Normalize and ensure no zero probabilities
+        probs = probs + 1e-10
+        return probs / probs.sum()
+
+    def generate_text(self, seed, length=100):
+        """Generate text using GPU-accelerated processing."""
+        sequence = []
+        
+        # Convert seed to indices
+        for word in seed.split():
+            idx = self._get_word_index(word)
+            if idx is not None:
+                sequence.append(idx)
+        
+        if not sequence:
+            return "Error: Seed words not found in training data"
         
         while len(sequence) < length:
-            # Get current context
-            context = self._get_context(sequence, len(sequence))
-            
-            if context not in self.words:
-                # Backoff to smaller context
-                while len(context) > 0 and context not in self.words:
-                    context = context[1:]
-                if not context:
-                    break
-            
-            # Get probabilities for next word
-            word_counts = self.words[context]["global"]
-            total = sum(word_counts.values())
-            
-            if total == 0:
-                break
+            # Use GPU for probability calculation
+            with torch.no_grad():
+                probs = self._get_next_word_probabilities(sequence)
+                # Move probabilities to CPU for sampling
+                probs_cpu = probs.cpu().numpy()
                 
-            # Select next word
-            probs = {word: count/total for word, count in word_counts.items()}
-            words = list(probs.keys())
-            weights = list(probs.values())
-            next_word = random.choices(words, weights=weights)[0]
-            
-            # Add word to sequence
-            sequence.append(next_word)
-            
-            # Periodically optimize using traceback
-            if len(sequence) % 5 == 0:
-                sequence = self._traceback_optimize(sequence, len(sequence) - 1)
-            
-            # After each word, look back and try to improve coherence
-            if len(sequence) > self.traceback_depth:
-                # Score current sequence
-                current_score = self._score_sequence(sequence, len(sequence) - 1)
-                
-                # Try to improve recent segments
-                improved_sequence = self._traceback_optimize(sequence, len(sequence) - 1)
-                improved_score = self._score_sequence(improved_sequence, len(sequence) - 1)
-                
-                # Keep improvements
-                if improved_score > current_score:
-                    sequence = improved_sequence
+                # Sample next word
+                next_idx = torch.tensor(
+                    random.choices(
+                        range(len(self.idx_to_word)), 
+                        weights=probs_cpu
+                    )[0], 
+                    device=self.device
+                )
+                sequence.append(next_idx.item())
         
-        return " ".join(sequence)
+        return " ".join(self.idx_to_word[idx] for idx in sequence)
 
 def main():
-    # Initialize generator
-    print("Initializing text generator...")
-    generator = TextGenerator(context_window=3, traceback_depth=5)
+    # Create generator with GPU support
+    generator = GPUTextGenerator(context_window=5, 
+                                 traceback_depth=15, 
+                                 batch_size=100, 
+                                 use_gpu=True)
     
-    # Get training file
     filename = input("Enter training file path: ")
     try:
         with open(filename, 'r', encoding='utf-8') as f:
-            text = f.read()
+            text = ' '.join(f.read().split()[:-1])
     except Exception as e:
         print(f"Error reading file: {e}")
         return
     
-    # Train model
     print("\nTraining model...")
     generator.train(text)
-    print("Training complete!")
     
-    # Generation loop
     while True:
         try:
-            seed = input("Enter seed text: ")
-
-            length = 250
-
-            # Generate text
-            result = generator.generate_with_traceback(seed, length)
+            seed = input("\nEnter seed text (or 'quit' to exit): ")
+            if seed.lower() == 'quit':
+                break
+                
+            result = generator.generate_text(seed, 250)
             print("\nGenerated text:")
             print(result)
             
