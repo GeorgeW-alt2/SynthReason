@@ -1,191 +1,162 @@
-import random
+from collections import defaultdict
+from typing import Optional, List, Dict, Tuple
 import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from collections import defaultdict, Counter
+import random
 
-class GPUTextGenerator:
-    def __init__(self, context_window=3, traceback_depth=5, batch_size=1000, use_gpu=True):
+class TrigramPredictor:
+    def __init__(self):
+        # Store trigram frequencies
+        self.trigram_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        # Store word frequencies for random sampling
+        self.word_frequencies: Dict[str, int] = defaultdict(int)
+        
+    def _get_trigrams(self, words: List[str]) -> List[Tuple[str, str]]:
         """
-        Text generator with optional GPU acceleration.
+        Generate trigrams from a list of words.
         
         Args:
-            context_window (int): Number of previous words to consider
-            traceback_depth (int): Depth of pattern tracking
-            batch_size (int): Batch size for processing
-            use_gpu (bool): Whether to use GPU if available
+            words: List of words
+            
+        Returns:
+            List of (context, target) tuples
         """
-        self.context_window = context_window
-        self.traceback_depth = traceback_depth
-        self.batch_size = batch_size
-        
-        # GPU setup
-        self.device = torch.device('cuda' if use_gpu and torch.cuda.is_available() else 'cpu')
-        print(f"Using device: {self.device}")
-        
-        # Vocabulary management
-        self.word_to_idx = {}
-        self.idx_to_word = []
-        
-        # Transition matrix will be a PyTorch tensor
-        self.transition_matrix = None
-        self.pattern_store = defaultdict(float)
+        trigrams = []
+        for i in range(len(words) - 2):
+            context = f"{words[i]} {words[i+1]}"
+            target = words[i+2]
+            trigrams.append((context, target))
+        return trigrams
     
-    def _get_word_index(self, word, train=False):
-        """Get or create word index."""
-        if word not in self.word_to_idx:
-            if train:
-                idx = len(self.word_to_idx)
-                self.word_to_idx[word] = idx
-                self.idx_to_word.append(word)
-                return idx
-            return None
-        return self.word_to_idx[word]
-
-    def train(self, text):
-        """Train model with GPU-accelerated approach."""
-        words = text.split()
-        print(f"Vocabulary building...")
+    def learn(self, text: str) -> None:
+        """
+        Learn trigrams from input text.
         
-        # Build vocabulary more efficiently
-        word_counts = Counter(words)
-        # Only keep words that appear more than once
-        for word, count in word_counts.items():
-            if count > 1:
-                self._get_word_index(word, train=True)
+        Args:
+            text: Input text to learn from
+        """
+        # Tokenize and normalize text
+        words = text.lower().split()
         
-        vocab_size = len(self.word_to_idx)
-        print(f"Vocabulary size: {vocab_size}")
-        
-        # Convert words to indices, skipping unknown words
-        word_indices = []
+        # Count word frequencies
         for word in words:
-            idx = self.word_to_idx.get(word)
-            if idx is not None:
-                word_indices.append(idx)
+            self.word_frequencies[word] += 1
         
-        print("Building transition matrix...")
-        # Create a PyTorch tensor for transition matrix
-        self.transition_matrix = torch.zeros((vocab_size, vocab_size), 
-                                             dtype=torch.float32, 
-                                             device=self.device)
-        
-        # Count transitions
-        for i in range(1, len(word_indices)):
-            prev_idx = word_indices[i-1]
-            curr_idx = word_indices[i]
-            self.transition_matrix[prev_idx, curr_idx] += 1
-        
-        # Normalize rows (add small epsilon to avoid division by zero)
-        row_sums = self.transition_matrix.sum(dim=-1, keepdim=True)
-        row_sums[row_sums == 0] = 1  # Avoid division by zero
-        self.transition_matrix = self.transition_matrix / row_sums
-        
-        # Move to device
-        self.transition_matrix = self.transition_matrix.to(self.device)
-        
-        print("Processing patterns...")
-        # Store only frequent patterns
-        pattern_counts = Counter()
-        for i in range(2, len(word_indices)):
-            pattern = tuple(word_indices[i-1:i+1])
-            pattern_counts[pattern] += 1
-        
-        # Keep only patterns that appear multiple times
-        for pattern, count in pattern_counts.items():
-            if count > 1:
-                self.pattern_store[pattern] = count
-        
-        print("Training complete!")
-
-    def _get_next_word_probabilities(self, sequence):
-        """Calculate probabilities for next word using GPU."""
-        if not sequence:
-            # Uniform distribution
-            return torch.ones(len(self.idx_to_word), device=self.device) / len(self.idx_to_word)
-        
-        # Get transition probabilities from last word
-        last_idx = sequence[-1]
-        probs = self.transition_matrix[last_idx]
-        
-        # Add pattern influence
-        if len(sequence) >= 2:
-            pattern_prefix = tuple(sequence[-2:])
-            for word_idx in range(len(self.idx_to_word)):
-                pattern = pattern_prefix + (word_idx,)
-                if pattern in self.pattern_store:
-                    probs[word_idx] += 0.1 * self.pattern_store[pattern]
-        
-        # Normalize and ensure no zero probabilities
-        probs = probs + 1e-10
-        return probs / probs.sum()
-
-    def generate_text(self, seed, length=100):
-        """Generate text using GPU-accelerated processing."""
-        sequence = []
-        
-        # Convert seed to indices
-        for word in seed.split():
-            idx = self._get_word_index(word)
-            if idx is not None:
-                sequence.append(idx)
-        
-        if not sequence:
-            return "Error: Seed words not found in training data"
-        
-        while len(sequence) < length:
-            # Use GPU for probability calculation
-            with torch.no_grad():
-                probs = self._get_next_word_probabilities(sequence)
-                # Move probabilities to CPU for sampling
-                probs_cpu = probs.cpu().numpy()
-                
-                # Sample next word
-                next_idx = torch.tensor(
-                    random.choices(
-                        range(len(self.idx_to_word)), 
-                        weights=probs_cpu
-                    )[0], 
-                    device=self.device
-                )
-                sequence.append(next_idx.item())
-        
-        return " ".join(self.idx_to_word[idx] for idx in sequence)
-
-def main():
-    # Create generator with GPU support
-    generator = GPUTextGenerator(context_window=5, 
-                                 traceback_depth=15, 
-                                 batch_size=100, 
-                                 use_gpu=True)
+        # Learn trigrams
+        for context, target in self._get_trigrams(words):
+            self.trigram_counts[context][target] += 1
     
-    filename = input("Enter training file path: ")
-    try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            text = ' '.join(f.read().split()[:-1])
-    except Exception as e:
-        print(f"Error reading file: {e}")
-        return
+    def predict(self, sequence: str) -> List[Tuple[str, float]]:
+        """
+        Predict next word given a sequence using trigram probabilities.
+        
+        Args:
+            sequence: Input sequence of words
+            
+        Returns:
+            List of (word, probability) tuples
+        """
+        words = sequence.lower().split()[-2:]  # Get last two words
+        
+        if len(words) < 2:
+            return []
+        
+        context = f"{words[-2]} {words[-1]}"
+        
+        if context not in self.trigram_counts:
+            return []
+        
+        # Calculate probabilities
+        counts = self.trigram_counts[context]
+        total = sum(counts.values())
+        probs = [(word, count/total) for word, count in counts.items()]
+        
+        return sorted(probs, key=lambda x: x[1], reverse=True)
+
+    def _sample_next_word(self, predictions: List[Tuple[str, float]], temperature: float = 1.0) -> str:
+        """
+        Sample next word from predictions using temperature.
+        
+        Args:
+            predictions: List of (word, probability) tuples
+            temperature: Controls randomness (higher = more random)
+        
+        Returns:
+            Sampled word
+        """
+        if not predictions:
+            # If no predictions, sample from word frequencies
+            words = list(self.word_frequencies.keys())
+            frequencies = list(self.word_frequencies.values())
+            total = sum(frequencies)
+            probs = [f/total for f in frequencies]
+            return np.random.choice(words, p=probs)
+            
+        words, probs = zip(*predictions)
+        probs = np.array(probs)
+        
+        # Apply temperature scaling
+        probs = np.power(probs, 1/temperature)
+        probs = probs / np.sum(probs)
+        
+        return np.random.choice(words, p=probs)
+
+    def generate_text(self, seed: str, length: int = 50, temperature: float = 1.0) -> str:
+        """
+        Generate text starting from a seed sequence.
+        
+        Args:
+            seed: Initial sequence of words
+            length: Number of words to generate
+            temperature: Controls randomness (higher = more random)
+        
+        Returns:
+            Generated text
+        """
+        if not seed:
+            # If no seed, randomly select two words based on frequency
+            words = list(self.word_frequencies.keys())
+            frequencies = list(self.word_frequencies.values())
+            total = sum(frequencies)
+            probs = [f/total for f in frequencies]
+            current_sequence = list(np.random.choice(words, size=2, p=probs))
+        else:
+            current_sequence = seed.lower().split()
+            # Pad or trim to get exactly two words
+            if len(current_sequence) < 2:
+                words = list(self.word_frequencies.keys())
+                frequencies = list(self.word_frequencies.values())
+                total = sum(frequencies)
+                probs = [f/total for f in frequencies]
+                padding = list(np.random.choice(words, size=2-len(current_sequence), p=probs))
+                current_sequence = padding + current_sequence
+            current_sequence = current_sequence[-2:]
+
+        generated_text = current_sequence.copy()
+        
+        for _ in range(length):
+            # Get predictions for current sequence
+            predictions = self.predict(" ".join(current_sequence))
+            
+            # Sample next word
+            next_word = self._sample_next_word(predictions, temperature)
+            
+            # Add to generated text and update current sequence
+            generated_text.append(next_word)
+            current_sequence = current_sequence[1:] + [next_word]
+        
+        return " ".join(generated_text)
+
+# Example usage
+if __name__ == "__main__":
+    # Create predictor
+    predictor = TrigramPredictor()
     
-    print("\nTraining model...")
-    generator.train(text)
+    # Training text
+    with open("test.txt", 'r', encoding='utf-8') as f:
+        training_text = ' '.join(f.read().split()[:-1])
+    
+    # Train the model
+    predictor.learn(training_text)
     
     while True:
-        try:
-            seed = input("\nEnter seed text (or 'quit' to exit): ")
-            if seed.lower() == 'quit':
-                break
-                
-            result = generator.generate_text(seed, 250)
-            print("\nGenerated text:")
-            print(result)
-            
-        except KeyboardInterrupt:
-            break
-        except Exception as e:
-            print(f"Error: {e}")
-            continue
-
-if __name__ == "__main__":
-    main()
+        print("AI: ", predictor.generate_text(input("USER: "), length=250, temperature=1.0))
