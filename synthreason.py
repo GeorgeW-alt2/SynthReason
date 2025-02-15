@@ -4,11 +4,43 @@ import numpy as np
 import random
 
 class TrigramPredictor:
-    def __init__(self):
+    def __init__(self, contemplative_prob: float = 0.05):
         # Store trigram frequencies
         self.trigram_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
         # Store word frequencies for random sampling
         self.word_frequencies: Dict[str, int] = defaultdict(int)
+        self.contemplative_prob = contemplative_prob
+        
+        # Multi-word contemplative phrases
+        self.contemplative_phrases = [
+            # Uncertainty and reflection
+            "perhaps it is", "perhaps we should", "perhaps one might",
+            "it might be that", "it seems possible that",
+            "one might consider that", "it could well be that",
+            
+            # Analysis and consideration
+            "when one considers", "upon reflection", "in light of this",
+            "it stands to reason", "it bears noting that",
+            "taking this into account", "given this context",
+            
+            # Speculation and possibility
+            "we might suppose that", "one could imagine that",
+            "it is conceivable that", "let us consider that",
+            "it is worth examining", "we might ponder whether",
+            
+            # Observation and insight
+            "it appears that", "one notices that", "it becomes clear that",
+            "looking more closely", "upon examination", "as we can see",
+            
+            # Transitions and implications
+            "this suggests that", "which implies that", "from this we see",
+            "this naturally leads to", "this brings us to", "consequently we find",
+            
+            # Extended contemplation
+            "it is worth noting that", "we must consider whether",
+            "it is interesting to observe", "one cannot overlook that",
+            "it becomes apparent that", "we should recognize that"
+        ]
         
     def _get_trigrams(self, words: List[str]) -> List[Tuple[str, str]]:
         """Generate trigrams from a list of words."""
@@ -54,7 +86,20 @@ class TrigramPredictor:
         return sorted(probs, key=lambda x: x[1], reverse=True)
 
     def _sample_next_word(self, predictions: List[Tuple[str, float]], temperature: float = 1.0) -> str:
-        """Sample next word from predictions using temperature."""
+        """Sample next word from predictions using temperature, with contemplative phrases."""
+        # Randomly inject contemplative phrases
+        if random.random() < self.contemplative_prob:
+            phrase = random.choice(self.contemplative_phrases)
+            phrase_words = phrase.split()
+            # Return first word and store rest for next iterations
+            self._pending_words = phrase_words[1:]
+            return phrase_words[0]
+            
+        # If we have pending words from a phrase, return the next one
+        if hasattr(self, '_pending_words') and self._pending_words:
+            next_word = self._pending_words.pop(0)
+            return next_word
+            
         if not predictions:
             # If no predictions, sample from word frequencies
             words = list(self.word_frequencies.keys())
@@ -80,6 +125,9 @@ class TrigramPredictor:
         # Initialize sequence with seed
         current_sequence = seed.lower().split()
         generated_text = current_sequence.copy()
+        
+        # Clear any pending words at start of generation
+        self._pending_words = []
         
         # Ensure we have at least 2 words for context
         if len(current_sequence) < 2:
@@ -125,7 +173,7 @@ class TrigramPredictor:
 
 # Example usage
 if __name__ == "__main__":
-    predictor = TrigramPredictor()
+    predictor = TrigramPredictor(contemplative_prob=0.05)
     
     # Training text
     try:
