@@ -112,24 +112,8 @@ class TrigramPredictor:
         Returns:
             Generated text
         """
-        if not seed:
-            # If no seed, randomly select two words based on frequency
-            words = list(self.word_frequencies.keys())
-            frequencies = list(self.word_frequencies.values())
-            total = sum(frequencies)
-            probs = [f/total for f in frequencies]
-            current_sequence = list(np.random.choice(words, size=5, p=probs))
-        else:
-            current_sequence = seed.lower().split()
-            # Pad or trim to get exactly two words
-            if len(current_sequence) < 2:
-                words = list(self.word_frequencies.keys())
-                frequencies = list(self.word_frequencies.values())
-                total = sum(frequencies)
-                probs = [f/total for f in frequencies]
-                padding = list(np.random.choice(words, size=4-len(current_sequence), p=probs))
-                current_sequence = padding + current_sequence
-            current_sequence = current_sequence[-2:]
+
+        
 
         generated_text = current_sequence.copy()
         
@@ -143,7 +127,13 @@ class TrigramPredictor:
             # Add to generated text and update current sequence
             generated_text.append(next_word)
             current_sequence = current_sequence[1:] + [next_word]
-        
+            # Pad or trim to get exactly two words
+            words = list(self.word_frequencies.keys())
+            frequencies = list(self.word_frequencies.values())
+            total = sum(frequencies)
+            probs = [f/total for f in frequencies]
+            padding = list(np.random.choice(words, size=5-len(current_sequence), p=probs))
+            current_sequence = padding + current_sequence
         return " ".join(generated_text)
 
 # Example usage
@@ -152,7 +142,7 @@ if __name__ == "__main__":
     predictor = TrigramPredictor()
     
     # Training text
-    with open("test.txt", 'r', encoding='utf-8') as f:
+    with open(input("Enter filename: "), 'r', encoding='utf-8') as f:
         training_text = ' '.join(f.read().strip().split()[:-1])
     
     # Train the model
