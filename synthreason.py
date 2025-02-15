@@ -153,10 +153,10 @@ if __name__ == "__main__":
     
     # Training text
     with open("test.txt", 'r', encoding='utf-8') as f:
-        training_text = ' '.join(f.read().split()[:-1])
+        training_text = ' '.join(f.read().strip().split()[:-1])
     
     # Train the model
     predictor.learn(training_text)
     
     while True:
-        print("AI: ", predictor.generate_text(input("USER: "), length=250, temperature=1.0))
+        print("AI: ", predictor.generate_text(input("USER: "), length=250, temperature=0.7))
