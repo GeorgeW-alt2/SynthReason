@@ -11,8 +11,7 @@ class TrigramPredictor:
         self.word_frequencies: Dict[str, int] = defaultdict(int)
         self.contemplative_prob = contemplative_prob
         self.frequency_weight = frequency_weight  # Weight for frequency influence
-        
-        # Multi-word contemplative phrases (unchanged)
+
         # Multi-word contemplative phrases
         self.contemplative_phrases = [
             # Uncertainty and reflection
