@@ -55,7 +55,7 @@ class TrigramPredictor:
         Returns:
             List of (word, probability) tuples
         """
-        words = sequence.lower().split()[-2:]  # Get last two words
+        words = sequence.lower().split()[-3:]  # Get last three words
         
         if len(words) < 2:
             return []
@@ -127,7 +127,7 @@ class TrigramPredictor:
                 frequencies = list(self.word_frequencies.values())
                 total = sum(frequencies)
                 probs = [f/total for f in frequencies]
-                padding = list(np.random.choice(words, size=5-len(current_sequence), p=probs))
+                padding = list(np.random.choice(words, size=4-len(current_sequence), p=probs))
                 current_sequence = padding + current_sequence
             current_sequence = current_sequence[-2:]
 
