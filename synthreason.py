@@ -127,7 +127,7 @@ class TrigramPredictor:
                 frequencies = list(self.word_frequencies.values())
                 total = sum(frequencies)
                 probs = [f/total for f in frequencies]
-                padding = list(np.random.choice(words, size=2-len(current_sequence), p=probs))
+                padding = list(np.random.choice(words, size=5-len(current_sequence), p=probs))
                 current_sequence = padding + current_sequence
             current_sequence = current_sequence[-2:]
 
