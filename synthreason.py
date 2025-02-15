@@ -114,6 +114,7 @@ class TrigramPredictor:
         """
 
         
+        current_sequence = seed.lower().split()
 
         generated_text = current_sequence.copy()
         
