@@ -118,7 +118,7 @@ class TrigramPredictor:
             frequencies = list(self.word_frequencies.values())
             total = sum(frequencies)
             probs = [f/total for f in frequencies]
-            current_sequence = list(np.random.choice(words, size=2, p=probs))
+            current_sequence = list(np.random.choice(words, size=5, p=probs))
         else:
             current_sequence = seed.lower().split()
             # Pad or trim to get exactly two words
