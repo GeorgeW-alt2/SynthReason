@@ -5,8 +5,7 @@ import random
 from dataclasses import dataclass
 
 class TrigramPredictor:
-    def __init__(self, contemplative_prob: float = 0.05, frequency_weight: float = 0.3,
-                 hole_threshold: float = 0.1):
+    def __init__(self, frequency_weight: float = 0.7):
         self.trigram_counts = defaultdict(lambda: defaultdict(int))
         self.word_frequencies = defaultdict(int)
         self.frequency_weight = frequency_weight
@@ -119,7 +118,7 @@ class TrigramPredictor:
         return np.random.choice(words, p=probs)
 # Example usage
 if __name__ == "__main__":
-    predictor = TrigramPredictor(hole_threshold=0.1)
+    predictor = TrigramPredictor()
     
     # Example training text
     with open(input("Enter filename: "), 'r', encoding='utf-8') as f:
