@@ -1,16 +1,17 @@
-
 from collections import defaultdict
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple, NamedTuple
 import numpy as np
 import random
+from dataclasses import dataclass
 
 class TrigramPredictor:
-    def __init__(self, contemplative_prob: float = 0.05):
-        # Store trigram frequencies
-        self.trigram_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
-        # Store word frequencies for random sampling
-        self.word_frequencies: Dict[str, int] = defaultdict(int)
+    def __init__(self, contemplative_prob: float = 0.05, frequency_weight: float = 0.3,
+                 hole_threshold: float = 0.1):
+        self.trigram_counts = defaultdict(lambda: defaultdict(int))
+        self.word_frequencies = defaultdict(int)
         self.contemplative_prob = contemplative_prob
+        self.frequency_weight = frequency_weight
+       
         
         # Multi-word contemplative phrases
         self.contemplative_phrases = [
@@ -51,7 +52,63 @@ class TrigramPredictor:
             target = words[i+2]
             trigrams.append((context, target))
         return trigrams
-    
+
+        
+    def predict(self, sequence: str) -> List[Tuple[str, float]]:
+        """Predict next word with probability hole analysis."""
+        words = sequence.lower().split()
+        
+        if len(words) < 2:
+            return []
+        
+        context = f"{words[-2]} {words[-1]}"
+        
+        if context not in self.trigram_counts:
+            
+            return []
+        
+        # Calculate base probabilities
+        counts = self.trigram_counts[context]
+        total_count = sum(counts.values())
+        total_freq = sum(self.word_frequencies.values())
+        
+        # Combined predictions with frequency weighting
+        predictions = []
+        for word, count in counts.items():
+            trigram_prob = count / total_count
+            freq_prob = self.word_frequencies[word] / total_freq
+            combined_prob = ((1 - self.frequency_weight) * trigram_prob + 
+                           self.frequency_weight * freq_prob)
+            predictions.append((word, combined_prob))
+        
+        # Normalize probabilities
+        total_prob = sum(p[1] for p in predictions)
+        predictions = [(w, p/total_prob) for w, p in predictions]
+        
+        return sorted(predictions, key=lambda x: x[1], reverse=True)
+
+    def generate_text(self, seed: str, length: int = 50, temperature: float = 1.0) -> Tuple[str, Dict]:
+        """Generate text and return hole statistics."""
+        current_sequence = seed.lower().split()
+        generated_text = current_sequence.copy()
+        
+        self._pending_words = []
+        
+        if len(current_sequence) < 2:
+            words = list(self.word_frequencies.keys())
+            frequencies = list(self.word_frequencies.values())
+            total = sum(frequencies)
+            probs = [f/total for f in frequencies]
+            padding = list(np.random.choice(words, size=max(0, 2-len(current_sequence)), p=probs))
+            current_sequence = padding + current_sequence
+        
+        for _ in range(length):
+            predictions = self.predict(" ".join(current_sequence[-2:]))
+            next_word = self._sample_next_word(predictions, temperature)
+            generated_text.append(next_word)
+            current_sequence = current_sequence[-2:] + [next_word]
+        
+        return " ".join(generated_text)
     def learn(self, text: str) -> None:
         """Learn trigrams from input text."""
         # Tokenize and normalize text
@@ -64,28 +121,7 @@ class TrigramPredictor:
         # Learn trigrams
         for context, target in self._get_trigrams(words):
             self.trigram_counts[context][target] += 1
-    
-    def predict(self, sequence: str) -> List[Tuple[str, float]]:
-        """Predict next word given a sequence using trigram probabilities."""
-        words = sequence.lower().split()
-        
-        # Need at least 2 words for context
-        if len(words) < 2:
-            return []
-        
-        # Get last two words for context
-        context = f"{words[-2]} {words[-1]}"
-        
-        if context not in self.trigram_counts:
-            return []
-        
-        # Calculate probabilities
-        counts = self.trigram_counts[context]
-        total = sum(counts.values())
-        probs = [(word, count/total) for word, count in counts.items()]
-        
-        return sorted(probs, key=lambda x: x[1], reverse=True)
-
+            
     def _sample_next_word(self, predictions: List[Tuple[str, float]], temperature: float = 1.0) -> str:
         """Sample next word from predictions using temperature, with contemplative phrases."""
         # Randomly inject contemplative phrases
@@ -120,81 +156,15 @@ class TrigramPredictor:
         probs = probs / np.sum(probs)
         
         return np.random.choice(words, p=probs)
-
-    def generate_text(self, seed: str, length: int = 50, temperature: float = 1.0, update_frequencies: bool = True) -> str:
-        """Generate text starting from a seed sequence."""
-        # Initialize sequence with seed
-        current_sequence = seed.lower().split()
-        generated_text = current_sequence.copy()
-        
-        # Clear any pending words at start of generation
-        self._pending_words = []
-        
-        # Ensure we have at least 2 words for context
-        if len(current_sequence) < 2:
-            # Pad with random words if needed
-            words = list(self.word_frequencies.keys())
-            frequencies = list(self.word_frequencies.values())
-            total = sum(frequencies)
-            probs = [f/total for f in frequencies]
-            padding = list(np.random.choice(words, size=max(0, 2-len(current_sequence)), p=probs))
-            current_sequence = padding + current_sequence
-        
-        # Track new frequencies during generation
-        new_frequencies = defaultdict(int)
-        
-        for _ in range(length):
-            # Get predictions for current sequence
-            predictions = self.predict(" ".join(current_sequence[-2:]))
-            
-            # Sample next word
-            next_word = self._sample_next_word(predictions, temperature)
-            
-            # Update frequencies
-            if update_frequencies:
-                new_frequencies[next_word] += 1
-            
-            # Add to generated text and update sequence
-            generated_text.append(next_word)
-            current_sequence.append(next_word)
-            
-            # Keep only the last 2 words for context
-            current_sequence = current_sequence[-2:]
-        
-        # Update model's word frequencies if requested
-        if update_frequencies:
-            for word, freq in new_frequencies.items():
-                self.word_frequencies[word] += freq
-                
-            # Update trigram counts with generated sequences
-            for context, target in self._get_trigrams(generated_text):
-                self.trigram_counts[context][target] += 1
-        
-        return " ".join(generated_text)
-
 # Example usage
 if __name__ == "__main__":
-    predictor = TrigramPredictor(contemplative_prob=0.05)
+    predictor = TrigramPredictor(hole_threshold=0.1)
     
-    # Training text
-    try:
-        with open(input("Enter filename: "), 'r', encoding='utf-8') as f:
-            training_text = f.read().strip()
-        
-        # Train the model
-        predictor.learn(training_text)
-        
-        # Interactive generation loop
-        while True:
-            seed = input("USER: ").strip()
-            if not seed:  # Exit on empty input
-                break
-            print("AI:", predictor.generate_text(
-                seed=seed,
-                length=250,
-                temperature=0.7  # Using a reasonable temperature value
-            ))
-    except KeyboardInterrupt:
-        print("\nExiting...")
-    except Exception as e:
-        print(f"Error: {e}")
+    # Example training text
+    with open(input("Enter filename: "), 'r', encoding='utf-8') as f:
+        training_text = f.read().strip()
+    
+    predictor.learn(training_text)
+    while True:
+        generated = predictor.generate_text(input("USER: "), length=250)
+        print("\nGenerated text:", generated)
