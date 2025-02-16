@@ -5,15 +5,13 @@ import numpy as np
 import random
 
 class TrigramPredictor:
-    def __init__(self, contemplative_prob: float = 0.05, frequency_weight: float = 0.3):
+    def __init__(self, contemplative_prob: float = 0.05):
         # Store trigram frequencies
         self.trigram_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
         # Store word frequencies for random sampling
         self.word_frequencies: Dict[str, int] = defaultdict(int)
         self.contemplative_prob = contemplative_prob
-        self.frequency_weight = frequency_weight  # Weight for frequency influence
         
-        # Multi-word contemplative phrases (unchanged)
         # Multi-word contemplative phrases
         self.contemplative_phrases = [
             # Uncertainty and reflection
@@ -68,7 +66,7 @@ class TrigramPredictor:
             self.trigram_counts[context][target] += 1
     
     def predict(self, sequence: str) -> List[Tuple[str, float]]:
-        """Predict next word given a sequence using trigram probabilities, weighted by word frequencies."""
+        """Predict next word given a sequence using trigram probabilities."""
         words = sequence.lower().split()
         
         # Need at least 2 words for context
@@ -81,32 +79,12 @@ class TrigramPredictor:
         if context not in self.trigram_counts:
             return []
         
-        # Calculate base probabilities from trigrams
+        # Calculate probabilities
         counts = self.trigram_counts[context]
-        total_trigram_count = sum(counts.values())
+        total = sum(counts.values())
+        probs = [(word, count/total) for word, count in counts.items()]
         
-        # Get total word frequency for normalization
-        total_word_freq = sum(self.word_frequencies.values())
-        
-        # Calculate combined probabilities using both trigram and frequency information
-        probs = []
-        for word, count in counts.items():
-            # Base probability from trigram
-            trigram_prob = count / total_trigram_count
-            
-            # Probability from word frequency
-            freq_prob = self.word_frequencies[word] / total_word_freq
-            
-            # Combine probabilities with weighting
-            combined_prob = (1 - self.frequency_weight) * trigram_prob + self.frequency_weight * freq_prob
-            
-            probs.append((word, combined_prob))
-        
-        # Normalize probabilities
-        total_prob = sum(p[1] for p in probs)
-        normalized_probs = [(word, prob/total_prob) for word, prob in probs]
-        
-        return sorted(normalized_probs, key=lambda x: x[1], reverse=True)
+        return sorted(probs, key=lambda x: x[1], reverse=True)
 
     def _sample_next_word(self, predictions: List[Tuple[str, float]], temperature: float = 1.0) -> str:
         """Sample next word from predictions using temperature, with contemplative phrases."""
@@ -159,7 +137,7 @@ class TrigramPredictor:
             frequencies = list(self.word_frequencies.values())
             total = sum(frequencies)
             probs = [f/total for f in frequencies]
-            padding = list(np.random.choice(words, size=max(0, 5-len(current_sequence)), p=probs))
+            padding = list(np.random.choice(words, size=max(0, 2-len(current_sequence)), p=probs))
             current_sequence = padding + current_sequence
         
         # Track new frequencies during generation
@@ -196,7 +174,7 @@ class TrigramPredictor:
 
 # Example usage
 if __name__ == "__main__":
-    predictor = TrigramPredictor(contemplative_prob=0.05, frequency_weight=0.3)
+    predictor = TrigramPredictor(contemplative_prob=0.05)
     
     # Training text
     try:
@@ -214,7 +192,7 @@ if __name__ == "__main__":
             print("AI:", predictor.generate_text(
                 seed=seed,
                 length=250,
-                temperature=0.7
+                temperature=0.7  # Using a reasonable temperature value
             ))
     except KeyboardInterrupt:
         print("\nExiting...")
